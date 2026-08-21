@@ -97,6 +97,20 @@ never something a script does — nothing here touches the network.
 repos and records their stack in `data/stacks.json`; everything else is pure,
 offline rendering from that file. Only the scan needs the clones present.
 
+## Scope review and momentum
+
+The coach asks, once a month, whether a repo should still exist: **keep**,
+**snooze 90 days**, or **kill**. Two ignored reviews auto-propose a snooze rather
+than asking a third time. **Kill is a flag in this repo and nothing else** — no
+repository is ever archived on GitHub (Decision D4's default). Repos you put
+down leave the queue and the batches, and are listed under "repos you have put
+down" so nothing vanishes without a trace. A snooze expires on its own.
+
+The streak in the momentum strip counts **days since an ask was dropped**, not
+days of activity. A quiet day does not break it — silence is a feature, and a
+streak that punished the coach for having nothing to say would measure the wrong
+thing.
+
 ## Operating principle
 
 The coach optimizes for **finishing over starting**. It surfaces exactly one prepped

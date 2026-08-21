@@ -26,6 +26,7 @@
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { load, save, getRepo, isOwnerBlocked, BLOCKERS, LANES, PORTFOLIO_PATH } from './portfolio.js';
 import { isoDate } from './select.js';
+import { isDormant, reviewDue } from './scope.js';
 
 const DAY = 24 * 60 * 60 * 1000;
 const asDate = (iso) => (iso ? Date.parse(iso.length === 10 ? `${iso}T12:00:00Z` : iso) : NaN);
@@ -220,10 +221,16 @@ export function applyScan(portfolio, results = {}, { date = isoDate(Date.now()) 
  * finished work is exempt: "untouched" is a question about whether a project
  * should exist, and a 95% repo has already answered it.
  */
-export function stalenessSweep(portfolio, { now = Date.now(), days = STALE_DAYS, maxPct = 70 } = {}) {
+export function stalenessSweep(portfolio, { now = Date.now(), days = STALE_DAYS, maxPct = 70, date = null } = {}) {
+  const today = date ?? isoDate(now);
+  // The scope question is monthly. Asking it again a week later is nagging,
+  // and this coach's whole credibility rests on not doing that.
+  if (!reviewDue(portfolio, { date: today })) return [];
+
   const flagged = [];
   for (const repo of portfolio.repos) {
     if (repo.pct >= maxPct || repo.launched) continue;
+    if (isDormant(repo, today)) continue;
     if (repo.scope_review_due || repo.scope_review) continue;
     const last = repo.last_commit ?? repo.pushed_at;
     if (!last) continue;

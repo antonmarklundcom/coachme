@@ -15,8 +15,9 @@
 
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { ROOT, load, NUDGES_PATH, ownerMinutes, isOwnerBlocked } from './portfolio.js';
+import { ROOT, load, NUDGES_PATH } from './portfolio.js';
 import { launchQueue, agentLane, dbBatches, rank } from './score.js';
+import { momentum, isDormant, isKilled } from './scope.js';
 import { render } from './template.js';
 import { escapeHtml } from './template.js';
 import { markdownToHtml } from './markdown.js';
@@ -107,31 +108,15 @@ export function buildModel(portfolio, { now = Date.now(), config = {}, decisions
   const queue = launchQueue(portfolio);
   const scored = new Map(rank(portfolio).map((e) => [e.repo.name, e]));
 
-  // hPanel burn-down (DESIGN.md §2.6): the batched cost of the DB backlog, not
-  // the naive per-repo sum — batching is exactly what makes it smaller.
-  const remaining = dbBatches(portfolio).reduce((sum, b) => sum + b.minutes, 0);
-  const baseline = config.hpanel_baseline_minutes ?? remaining;
-  const burnedPct = baseline > 0 ? Math.round(((baseline - remaining) / baseline) * 100) : 0;
-
-  const launchedThisMonth = portfolio.repos.filter(
-    (r) => typeof r.launched === 'string' && now - Date.parse(r.launched) < 31 * DAY
-  );
-  const history = nudges?.history ?? [];
-  const sessionsDone = history.filter((h) => h.type === 'db-session' && h.outcome === 'acted').length;
+  const asOf = humanDate(now);
+  const strip = momentum(portfolio, nudges, { date: asOf, baselineMinutes: config.hpanel_baseline_minutes ?? null });
 
   const decisionState = portfolio.decisions ?? {};
-  const unclassified = portfolio.repos.filter((r) => r.blocker === 'owner-setup-unclassified');
+  const unclassified = portfolio.repos.filter((r) => r.blocker === 'owner-setup-unclassified').filter((r) => !isDormant(r, asOf));
 
   return {
     generated: humanDate(now),
-    momentum: {
-      launches: launchedThisMonth.length,
-      sessions: sessionsDone,
-      streak: portfolio.streak ?? 0,
-      remaining_h: (remaining / 60).toFixed(1),
-      baseline_h: (baseline / 60).toFixed(1),
-      burned_pct: Math.max(0, Math.min(100, burnedPct)),
-    },
+    momentum: strip,
     today,
     has_today: !!today,
     queue: queue.map((e) => ({
@@ -195,7 +180,14 @@ export function buildModel(portfolio, { now = Date.now(), config = {}, decisions
         has_proposal: !!r.scope_review_proposed,
       })),
     scope_empty: !portfolio.repos.some((r) => r.scope_review_due === true),
-    owner_minutes_total: portfolio.repos.filter(isOwnerBlocked).reduce((s, r) => s + ownerMinutes(r), 0),
+    owner_minutes_total: strip.owner_minutes_total,
+    dormant: portfolio.repos
+      .filter((r) => isDormant(r, asOf))
+      .map((r) => ({
+        name: r.name,
+        state: isKilled(r) ? 'killed' : `snoozed until ${r.snoozed_until}`,
+      })),
+    dormant_count: portfolio.repos.filter((r) => isDormant(r, asOf)).length,
   };
 }
 
