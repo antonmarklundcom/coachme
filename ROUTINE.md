@@ -5,9 +5,12 @@ below is what the Routine actually fires with; if you change the prompt, change
 it here first and copy it over (`update_trigger`), so the behaviour stays
 version-controlled.
 
-- **Schedule:** daily, `0 6 * * *` UTC = **08:00 Europe/Stockholm** (Decision D1's
-  default — see "Timezone" below).
+- **Schedule:** daily, `0 11 * * *` UTC = **08:00 America/Asunción** (Decision D1 —
+  see "Timezone" below).
 - **Mode:** fresh session per firing.
+- **Model:** `claude-sonnet-5`. This run is a driver — it calls tested scripts and
+  relays their output. It does not need a reasoning model, and it runs 365 times
+  a year on the owner's plan.
 - **Push notification:** on.
 - **Trigger id:** recorded in `data/config.json` as `routine_trigger_id`.
 
@@ -31,8 +34,9 @@ is already in the repo; the scripts hold all the logic.
    returned HTML to `/tmp/page.html`. If the fetch fails, continue without it —
    run step 3 without `--page` rather than skipping the run.
 
-3. Work out today's date in Europe/Stockholm (not UTC — the cap rules are about
-   the owner's days), then run:
+3. Work out today's date in the owner's timezone — read `owner_timezone` from
+   `data/config.json` and use that, not UTC. The cap rules ("one push a day",
+   "Sunday is silent") are about the owner's calendar. Then run:
 
        node src/run.js --page /tmp/page.html --date <YYYY-MM-DD>
 
@@ -74,15 +78,25 @@ Never write credentials anywhere. Never edit `src/`, `templates/` or
 
 ## Timezone
 
-Cron is UTC and does not follow daylight saving. `0 6 * * *` is 08:00 in
-Stockholm from late March to late October, and 07:00 the rest of the year. When
-the clocks change, one `update_trigger` call to `0 7 * * *` restores 08:00 —
-or leave it, if an hour earlier in winter is fine.
+There are two separate settings, and moving country needs both:
 
-Step 3 computes the *date* in Europe/Stockholm on purpose. "One push per day"
-and "Sunday is silent" are about the owner's calendar, and a 06:00 UTC firing is
-already the same day locally — but that stops being true if the fire time ever
-moves earlier, so the script is told the local date rather than inferring one.
+| What | Where | Now |
+|---|---|---|
+| **when** it fires | the trigger's cron, in UTC | `0 11 * * *` |
+| **which day** the run thinks it is | `owner_timezone` in `data/config.json` | `America/Asuncion` |
+
+The cron cannot read the config file — it is evaluated by the scheduler, not by
+the session — so changing timezone is one `update_trigger` call plus one line in
+`data/config.json`. Ask for it and it takes a minute.
+
+Paraguay has been permanently UTC-3 since 2024, with no daylight saving, so
+`0 11 * * *` stays 08:00 all year. Sweden does not: `0 6 * * *` there is 08:00 in
+summer and 07:00 in winter, and would need correcting twice a year.
+
+Step 3 computes the *date* in the owner's timezone on purpose. A firing at 11:00
+UTC is the same calendar day in Asunción, but that stops being true the moment
+the hour moves, and "one push per day" silently breaking is exactly the failure
+this coach cannot afford.
 
 ## Manual firing
 

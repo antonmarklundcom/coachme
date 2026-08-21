@@ -4,15 +4,16 @@ The daily Routine (`ROUTINE.md`) is cheap and never reads a repo. This is the
 other half: a scan that goes and looks, twice a week and on request, and writes
 what it finds into `data/portfolio.json`.
 
-- **Schedule:** Monday and Thursday, `0 5 * * 1,4` UTC — an hour before the
-  daily nudge, so the nudge that morning is already based on fresh state.
+- **Schedule:** Monday and Thursday, `0 10 * * 1,4` UTC = 07:00 America/Asunción —
+  an hour before the daily nudge, so the nudge that morning is already based on
+  fresh state.
 - **Mode:** fresh session per firing. **Push notification: off.** A scan updates
   the record silently; if the scan changed something that deserves your
   attention, the daily Routine at 06:00 is what tells you (DESIGN.md §3 — one
   push a day, from one place).
-- **Model:** Sonnet is the right tier. This is reading against a fixed rubric,
-  not judgement. Save the expensive model for deciding what to *do* about a
-  blocked repo.
+- **Model:** `claude-sonnet-5`. This is reading against a fixed rubric, not
+  judgement. Save the expensive model for deciding what to *do* about a blocked
+  repo.
 - **Trigger id:** `data/config.json` → `scan_trigger_id`.
 
 ## Why it is incremental
