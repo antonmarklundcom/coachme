@@ -19,6 +19,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { ROOT, load, save, NUDGES_PATH } from './portfolio.js';
 import { harvest } from './harvest.js';
+import { readMemory, adoptMemory } from './memory.js';
 import { selectNudge, resolveOutcomes, applyDecision, isoDate } from './select.js';
 import { applyScopeAnswers, wakeSnoozed } from './scope.js';
 import { buildModel, renderDashboard, CONFIG_PATH, DECISIONS_PATH, DIST_DIR } from './render.js';
@@ -30,6 +31,12 @@ const readJson = (p, fallback) => (existsSync(p) ? JSON.parse(readFileSync(p, 'u
  * rendered page and the summary; writing is the caller's business.
  */
 export function runDaily({ portfolio, nudges, config, decisions, html = null, date = isoDate(Date.now()) }) {
+  // 0. recover — the page carries the history it was rendered from. If the last
+  // run could not write to the repo, this is where its record comes back, and
+  // the caps below count days the coach really spoke rather than days it managed
+  // to commit.
+  const adopted = adoptMemory(nudges, readMemory(html));
+
   // 1. harvest — what did the owner do on the page since last time?
   const { changes } = html ? harvest(html, portfolio, { date }) : { changes: [] };
   const touched = changes.map((c) => c.split(':')[0].trim()).filter((name) => portfolio.repos.some((r) => r.name === name));
@@ -56,6 +63,7 @@ export function runDaily({ portfolio, nudges, config, decisions, html = null, da
     summary: {
       date,
       harvested: changes,
+      adopted_from_page: adopted.map((r) => `${r.date} ${r.type}`),
       resolved: resolved.map((r) => `${r.date} ${r.type} → ${r.outcome}`),
       push: decision.push,
       type: decision.type,
@@ -63,7 +71,7 @@ export function runDaily({ portfolio, nudges, config, decisions, html = null, da
       title: decision.title ?? null,
       body: decision.body ?? null,
       reason: decision.reason,
-      commit_needed: changes.length > 0 || !!decision.record,
+      commit_needed: changes.length > 0 || adopted.length > 0 || !!decision.record,
     },
   };
 }

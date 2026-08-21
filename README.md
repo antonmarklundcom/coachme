@@ -93,6 +93,12 @@ The dashboard's permanent URL lives in `data/config.json`. `render.js` writes th
 page; publishing it is a session action (the Artifact tool, `capabilities: {artifact: {}}`),
 never something a script does — nothing here touches the network.
 
+The page also carries the coach's own memory: `src/memory.js` embeds the nudge
+history in an inert `application/json` block, and the next run adopts whatever
+the page knows that the repo does not. A Routine session is not always permitted
+to commit — and a coach that forgets what it said yesterday repeats it forever,
+so the surface that always works carries the backup.
+
 `runbook.js` is deliberately split in two: `--scan` reads local clones of the target
 repos and records their stack in `data/stacks.json`; everything else is pure,
 offline rendering from that file. Only the scan needs the clones present.

@@ -84,3 +84,32 @@ test('a run is a pure function of its inputs — nothing is written by runDaily 
   run(load(), emptyNudges(), { date: MON });
   assert.equal(JSON.stringify(load()), before, 'data/portfolio.json must be untouched on disk');
 });
+
+test('the coach remembers what it said even when the commit never lands', () => {
+  // Both live runs on 2026-08-21 decided a nudge, republished the dashboard,
+  // and left `main` untouched. Without a record, the caps read an empty history
+  // every morning and the same ask repeats forever. The page it publishes
+  // carries that record, so the day-3 shrink still fires.
+  const dates = ['2026-08-24', '2026-08-25', '2026-08-26', '2026-08-27'];
+
+  const spoken = (carryPage) => {
+    let previous = null;
+    return dates.map((date) => {
+      // A fresh load each day: the repo is exactly as it was, because nothing
+      // this run writes ever reaches it.
+      const result = run(load(), emptyNudges(), { date, html: carryPage ? previous : null });
+      previous = result.page;
+      return result.summary;
+    });
+  };
+
+  const amnesiac = spoken(false);
+  assert.deepEqual(amnesiac.map((s) => s.type), ['db-session', 'db-session', 'db-session', 'db-session'],
+    'with no memory the coach nags identically, forever');
+
+  const remembering = spoken(true);
+  assert.deepEqual(remembering.map((s) => s.type), ['db-session', 'db-session', 'shrunk', 'shrunk'],
+    'carried on the page, the same history shrinks the ask on day three');
+  assert.match(remembering[2].title, /5 minutes/);
+  assert.deepEqual(remembering[1].adopted_from_page, ['2026-08-24 db-session']);
+});

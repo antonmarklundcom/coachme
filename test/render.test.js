@@ -5,6 +5,7 @@ import { load } from '../src/portfolio.js';
 import { buildModel, renderDashboard, buildDashboard, todaysOneThing, DECISIONS_PATH, CONFIG_PATH } from '../src/render.js';
 import { assertNoSecrets } from '../src/runbook.js';
 import { markdownToHtml } from '../src/markdown.js';
+import { readMemory, adoptMemory } from '../src/memory.js';
 
 const decisions = JSON.parse(readFileSync(DECISIONS_PATH, 'utf8')).decisions;
 const config = JSON.parse(readFileSync(CONFIG_PATH, 'utf8'));
@@ -27,9 +28,39 @@ test('no template tags survive, and the page is content only (the shell adds hea
   assert.match(html, /^<title>Final Mile<\/title>/);
 });
 
-test('the page carries no script — every gesture persists through markup alone', () => {
-  assert.doesNotMatch(html, /<script/i);
+test('the page runs no script — every gesture persists through markup alone', () => {
+  // The one <script> allowed is the inert application/json memory block: the
+  // browser never executes it, and the coach reads it back when a run could not
+  // write to the repo (memory.js).
+  const scripts = [...html.matchAll(/<script\b[^>]*>/gi)].map((m) => m[0]);
+  assert.deepEqual(scripts, ['<script type="application/json" id="coach-memory">']);
   assert.doesNotMatch(html, /\son[a-z]+\s*=/i, 'no inline event handlers');
+});
+
+test('the page carries the history it was rendered from, and a later run adopts it', () => {
+  const spoken = { history: [{ date: '2026-08-19', type: 'db-session', repos: ['qr'], outcome: 'pending' }] };
+  const page = renderDashboard(buildModel(load(), { config, decisions, nudges: spoken }));
+  assert.deepEqual(readMemory(page), spoken.history, 'the block survives rendering');
+
+  const forgotten = { history: [] }; // a repo whose last commit never landed
+  const adopted = adoptMemory(forgotten, readMemory(page));
+  assert.equal(adopted.length, 1);
+  assert.deepEqual(forgotten.history, spoken.history);
+  assert.deepEqual(adoptMemory(forgotten, readMemory(page)), [], 'adopting twice is a no-op');
+});
+
+test('adopting never drops what the repo already knows', () => {
+  const local = { history: [{ date: '2026-08-20', type: 'quick-decisions', repos: [] }] };
+  const page = renderDashboard(buildModel(load(), { config, decisions, nudges: { history: [{ date: '2026-08-19', type: 'db-session', repos: ['qr'] }] } }));
+  adoptMemory(local, readMemory(page));
+  assert.deepEqual(local.history.map((r) => r.date), ['2026-08-19', '2026-08-20'], 'union, in date order');
+});
+
+test('a page with no memory block, or a mangled one, changes nothing', () => {
+  const local = { history: [{ date: '2026-08-20', type: 'db-session', repos: [] }] };
+  assert.deepEqual(adoptMemory(local, readMemory('<p>not the dashboard</p>')), []);
+  assert.deepEqual(adoptMemory(local, readMemory('<script type="application/json" id="coach-memory">{oh no</script>')), []);
+  assert.equal(local.history.length, 1);
 });
 
 test('both themes are defined at token level, never only inside a media query', () => {
