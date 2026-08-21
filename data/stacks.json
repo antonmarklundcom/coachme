@@ -1,0 +1,310 @@
+{
+  "meta": {
+    "source": "scanned from local clones under /home/user/antonmarklundcom",
+    "note": "Stack metadata only — never credentials. Refresh with: node src/runbook.js --scan <dir>"
+  },
+  "stacks": {
+    "besikt": {
+      "name": "besikt",
+      "package_name": "rapportverket",
+      "engine": "prisma",
+      "dialect": "postgresql",
+      "package_manager": "npm",
+      "migrations": 0,
+      "scripts": {
+        "generate": null,
+        "migrate": "db:push",
+        "push": "db:push",
+        "seed": "db:seed",
+        "verify": null,
+        "build": "build"
+      },
+      "env_file": ".env.example",
+      "env_session": [
+        "DATABASE_URL",
+        "NEXTAUTH_SECRET",
+        "NEXTAUTH_URL",
+        "ADMIN_EMAIL",
+        "ADMIN_PASSWORD"
+      ],
+      "env_deferred_count": 10,
+      "notes": []
+    },
+    "ecom": {
+      "name": "ecom",
+      "package_name": "ecom",
+      "engine": "drizzle",
+      "dialect": "mysql",
+      "package_manager": "pnpm",
+      "migrations": 10,
+      "scripts": {
+        "generate": "db:generate",
+        "migrate": "db:push",
+        "push": "db:push",
+        "seed": "db:seed",
+        "verify": "db:check",
+        "build": "build"
+      },
+      "env_file": ".env.example",
+      "env_session": [
+        "DATABASE_URL",
+        "SESSION_SECRET",
+        "CUSTOMER_SESSION_SECRET",
+        "OWNER_EMAIL",
+        "OWNER_PASSWORD",
+        "OWNER_NAME"
+      ],
+      "env_deferred_count": 27,
+      "notes": [
+        "drizzle.config loads env files itself, but plain `tsx` scripts do not — export DATABASE_URL in the shell before running seeds."
+      ]
+    },
+    "qr": {
+      "name": "qr",
+      "package_name": "qr",
+      "engine": "drizzle",
+      "dialect": "mysql",
+      "package_manager": "npm",
+      "migrations": 0,
+      "scripts": {
+        "generate": "db:generate",
+        "migrate": "db:push",
+        "push": "db:push",
+        "seed": "seed:demo",
+        "verify": "typecheck",
+        "build": "build"
+      },
+      "env_file": ".env.example",
+      "env_session": [
+        "DATABASE_URL",
+        "SESSION_SECRET"
+      ],
+      "env_deferred_count": 2,
+      "notes": []
+    },
+    "lenceria": {
+      "name": "lenceria",
+      "package_name": "lenceria",
+      "engine": "drizzle",
+      "dialect": "mysql",
+      "package_manager": "pnpm",
+      "migrations": 5,
+      "scripts": {
+        "generate": "db:generate",
+        "migrate": "db:push",
+        "push": "db:push",
+        "seed": "db:seed",
+        "verify": "preflight",
+        "build": "build"
+      },
+      "env_file": ".env.example",
+      "env_session": [
+        "DATABASE_URL",
+        "SESSION_SECRET",
+        "OWNER_EMAIL",
+        "OWNER_PASSWORD",
+        "OWNER_NAME"
+      ],
+      "env_deferred_count": 22,
+      "notes": [
+        "drizzle.config loads env files itself, but plain `tsx` scripts do not — export DATABASE_URL in the shell before running seeds."
+      ]
+    },
+    "facturar": {
+      "name": "facturar",
+      "package_name": "facturar",
+      "engine": "drizzle",
+      "dialect": "mysql",
+      "package_manager": "npm",
+      "migrations": 1,
+      "scripts": {
+        "generate": "db:generate",
+        "migrate": "db:migrate",
+        "push": null,
+        "seed": "db:seed",
+        "verify": "typecheck",
+        "build": "build"
+      },
+      "env_file": ".env.example",
+      "env_session": [
+        "DATABASE_URL",
+        "SESSION_SECRET"
+      ],
+      "env_deferred_count": 6,
+      "notes": []
+    },
+    "negocio": {
+      "name": "negocio",
+      "package_name": "negocio-frontend",
+      "engine": "drizzle",
+      "dialect": "mysql",
+      "package_manager": "npm",
+      "migrations": 9,
+      "scripts": {
+        "generate": "db:generate",
+        "migrate": "db:migrate",
+        "push": null,
+        "seed": "db:import-seed",
+        "verify": "typecheck",
+        "build": "build"
+      },
+      "env_file": ".env.example",
+      "env_session": [
+        "DATABASE_URL",
+        "SESSION_SECRET"
+      ],
+      "env_deferred_count": 26,
+      "notes": []
+    },
+    "idioma": {
+      "name": "idioma",
+      "package_name": "idioma-scaffold",
+      "engine": "drizzle",
+      "dialect": "postgresql",
+      "package_manager": "npm",
+      "migrations": 7,
+      "scripts": {
+        "generate": "db:generate",
+        "migrate": "db:migrate",
+        "push": null,
+        "seed": "db:seed",
+        "verify": "typecheck",
+        "build": "build"
+      },
+      "env_file": ".env.example",
+      "env_session": [
+        "DATABASE_URL",
+        "AUTH_SECRET"
+      ],
+      "env_deferred_count": 12,
+      "notes": [
+        "drizzle.config loads env files itself, but plain `tsx` scripts do not — export DATABASE_URL in the shell before running seeds."
+      ]
+    },
+    "paraOU": {
+      "name": "paraOU",
+      "package_name": "paraou",
+      "engine": "prisma",
+      "dialect": "postgresql",
+      "package_manager": "npm",
+      "migrations": 10,
+      "scripts": {
+        "generate": "db:generate",
+        "migrate": "prisma:deploy",
+        "push": null,
+        "seed": null,
+        "verify": "typecheck",
+        "build": "build"
+      },
+      "env_file": ".env.example",
+      "env_session": [
+        "DATABASE_URL",
+        "ADMIN_KEY",
+        "AUTH_SECRET",
+        "AUTH_URL",
+        "ADMIN_EMAILS"
+      ],
+      "env_deferred_count": 46,
+      "notes": [
+        "Prisma declares Postgres extensions (vector, unaccent, pg_trgm) — the database must have them enabled before the first migration, or it fails on the first migrate."
+      ]
+    },
+    "yt": {
+      "name": "yt",
+      "package_name": "yt-intel",
+      "engine": "drizzle",
+      "dialect": "mysql",
+      "package_manager": "npm",
+      "migrations": 9,
+      "scripts": {
+        "generate": "db:generate",
+        "migrate": "db:migrate",
+        "push": "db:push",
+        "seed": "db:seed",
+        "verify": "db:check",
+        "build": "build"
+      },
+      "env_file": ".env.example",
+      "env_session": [
+        "DATABASE_URL",
+        "ADMIN_EMAIL",
+        "SESSION_SECRET"
+      ],
+      "env_deferred_count": 8,
+      "notes": []
+    },
+    "sitio": {
+      "name": "sitio",
+      "package_name": "sitio",
+      "engine": "drizzle",
+      "dialect": "mysql",
+      "package_manager": "npm",
+      "migrations": 1,
+      "scripts": {
+        "generate": "db:generate",
+        "migrate": "db:migrate",
+        "push": "db:push",
+        "seed": "db:seed",
+        "verify": "smoke",
+        "build": "build"
+      },
+      "env_file": ".env.example",
+      "env_session": [
+        "DATABASE_URL",
+        "SESSION_SECRET",
+        "SEED_ADMIN_EMAIL",
+        "SEED_ADMIN_PASSWORD"
+      ],
+      "env_deferred_count": 7,
+      "notes": [
+        "drizzle.config loads env files itself, but plain `tsx` scripts do not — export DATABASE_URL in the shell before running seeds."
+      ]
+    },
+    "realestateinparaguay": {
+      "name": "realestateinparaguay",
+      "package_name": "realestateinparaguay-com",
+      "engine": "drizzle",
+      "dialect": "mysql",
+      "package_manager": "npm",
+      "migrations": 0,
+      "scripts": {
+        "generate": "db:generate",
+        "migrate": "db:migrate",
+        "push": null,
+        "seed": null,
+        "verify": null,
+        "build": "build"
+      },
+      "env_file": ".env.example",
+      "env_session": [
+        "DATABASE_URL"
+      ],
+      "env_deferred_count": 10,
+      "notes": [
+        "No generated migrations in ./drizzle yet — `db:migrate` has nothing to apply. Run the generate step first."
+      ]
+    },
+    "inmobiliaria-py": {
+      "name": "inmobiliaria-py",
+      "package_name": "inmobiliaria-com-py",
+      "engine": "none",
+      "dialect": null,
+      "package_manager": "npm",
+      "migrations": 0,
+      "scripts": {
+        "generate": null,
+        "migrate": null,
+        "push": null,
+        "seed": null,
+        "verify": null,
+        "build": "build"
+      },
+      "env_file": null,
+      "env_session": [],
+      "env_deferred_count": 0,
+      "notes": [
+        "No database dependency found in package.json — this repo may not need a DB at all. Verify the blocker before booking hPanel time for it."
+      ]
+    }
+  }
+}

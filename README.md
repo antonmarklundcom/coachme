@@ -23,6 +23,7 @@ honest about where attention should go.
 | `DESIGN.md` | Diagnosis of the pattern + the full coaching logic: live-doc structure, nudge triggers and cadence, anti-annoyance rules, what each Routine run computes |
 | `PLAN.md` | PR-numbered build plan with the owner-vs-agent split and the business decisions needed before/while building |
 | `data/portfolio.json` | State of record for all 53 repos, seeded from the 2026-08 read-only audit |
+| `data/stacks.json` | Scanned stack metadata for the DB-blocked repos (engine, dialect, migration/seed commands) — never credentials |
 | `data/nudges.json` | Nudge history for the anti-annoyance state machine |
 | `runbooks/` | Generated per-repo DB/hosting setup runbooks (PR-2 output) — placeholders only, never real credentials |
 
@@ -60,8 +61,17 @@ Plain Node (>=20), no dependencies, no build step:
 node src/score.js            # ranked launch queue + the first proposed DB session
 node src/score.js --batches  # every proposed DB session
 node src/score.js --json     # machine-readable, for the Routine
+
+node src/runbook.js                              # regenerate every runbooks/*.md
+node src/runbook.js besikt                       # print one runbook
+node src/runbook.js --scan ../antonmarklundcom   # re-read the target repos' stacks
+
 npm test                     # node --test
 ```
+
+`runbook.js` is deliberately split in two: `--scan` reads local clones of the target
+repos and records their stack in `data/stacks.json`; everything else is pure,
+offline rendering from that file. Only the scan needs the clones present.
 
 ## Operating principle
 
