@@ -22,6 +22,7 @@ import { render } from './template.js';
 import { escapeHtml } from './template.js';
 import { markdownToHtml } from './markdown.js';
 import { RUNBOOKS_DIR } from './runbook.js';
+import { embedMemory } from './memory.js';
 
 export const CONFIG_PATH = join(ROOT, 'data', 'config.json');
 export const DECISIONS_PATH = join(ROOT, 'data', 'decisions.json');
@@ -116,6 +117,9 @@ export function buildModel(portfolio, { now = Date.now(), config = {}, decisions
 
   return {
     generated: humanDate(now),
+    // The page carries the nudge history it was rendered from, so the next run
+    // can recover it when the previous run's commit never landed (memory.js).
+    memory: embedMemory(nudges ?? { history: [] }),
     momentum: strip,
     today,
     has_today: !!today,

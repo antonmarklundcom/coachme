@@ -82,6 +82,7 @@ Never write credentials anywhere. Never edit `src/`, `templates/` or
 | WebFetch → `--page` | The live-doc's markup *is* the document: the owner's ticks live in the served HTML and nowhere else. This is the only way to learn them. |
 | `run.js` | harvest → resolve outcomes → select → apply → render, all of it tested. The prompt cannot drift from the design because it does not contain any of it. |
 | commit `data/` only | State changes are data. Code changes go through a PR like anything else. |
+| the page carries the history | The republish always works; the commit does not always land. `memory.js` embeds the nudge history in the page and the next run adopts it, so the caps count days the coach really spoke rather than days it managed to write to the repo. It is a fallback, not the record — when the commit lands, git wins. |
 | the state must land, by API if git will not | A Routine session is not always allowed to push to `main`. On 2026-08-21 the first live run decided a nudge and lost it that way — no commit, empty history, so the next day would have repeated the same nudge. The GitHub API route writes to `main` regardless of the session's branch policy. |
 | republish with `url` | Same permanent link, in place. Republishing without `url` would create a second artifact and orphan the one on the owner's phone. |
 | the exact final message | The completion notification is the session's last message. Anything the model adds is something the owner reads on a lock screen at 08:00. |
