@@ -51,6 +51,18 @@ test('a stale record is re-read even with no new commits', () => {
   assert.equal(planScan(p, remote, { now: later }).deep[0].name, 'anillos');
 });
 
+test('an unclassified blocker is read on the first scan that can, then stops forcing', () => {
+  const p = fresh();
+  const remote = listing({ gruas: { pushed_at: '2026-07-01T00:00:00Z' } }); // quiet since the audit
+  const { deep } = planScan(p, remote, { now: NOW });
+  assert.deepEqual(deep.map((d) => d.name), ['gruas'], 'D6 repos are the queue\'s blind spot — read them without waiting for a push');
+  assert.match(deep[0].why, /never classified/);
+
+  applyScan(p, { gruas: { next_step: 'point gruas.com.py at the built site' } }, { date: '2026-08-24' });
+  const after = planScan(p, remote, { now: NOW });
+  assert.equal(after.deep.length, 0, 'once scanned it waits its turn like everything else');
+});
+
 test('archived repos are skipped and forced repos are not', () => {
   const p = fresh();
   const remote = listing({

@@ -1,0 +1,22 @@
+name: test
+
+# The coach's state of record is written by unattended Routine sessions, so the
+# only thing standing between a bad merge and a corrupted portfolio.json is this
+# suite. It runs on every push and every PR.
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  node:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        node: ['20', '22']
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+      - run: npm test
