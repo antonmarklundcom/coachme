@@ -25,6 +25,32 @@ honest about where attention should go.
 | `data/portfolio.json` | State of record for all 53 repos, seeded from the 2026-08 read-only audit |
 | `runbooks/` | Generated per-repo DB/hosting setup runbooks (PR-2 output) — placeholders only, never real credentials |
 
+## How you actually use it (no hosting, ever)
+
+Nothing in this project runs on your PC and nothing gets hosted — not on Hostinger,
+not on a free host, no `coach.antonmarklund.com` subdomain, no DNS:
+
+- **On your phone or laptop** you open one thing: the dashboard's permanent
+  `claude.ai` Artifact URL (bookmark it / add to home screen). Artifacts are
+  **private by default** — only your Claude account sees it. Ticking boxes there is
+  the entire daily interaction.
+- **The code in this repo** runs inside Claude Code sessions in the cloud: the daily
+  Routine spins up a session, runs the scripts, republishes the dashboard, and sends
+  the push notification through the Claude app. You never start a server or a cron
+  job anywhere. (You *can* also run the scripts locally with `node`/Claude Code CLI
+  if you ever want to, but it's optional, not part of the design.)
+- Your **Hostinger Node.js slots stay untouched** — that constraint is why the
+  architecture is repo + Artifact + Routine in the first place.
+
+## Privacy
+
+- **This repo must be private.** It holds your portfolio state (`data/portfolio.json`),
+  which is your business situation. Owner action, 30 seconds, do it first.
+- The dashboard Artifact is private to your Claude account unless you explicitly share it.
+- **No real credentials ever** enter this repo or the dashboard — runbooks use
+  `<PASTE_PASSWORD>` placeholders; secrets live only in your password manager and
+  local `.env` files on the machines that need them.
+
 ## Operating principle
 
 The coach optimizes for **finishing over starting**. It surfaces exactly one prepped

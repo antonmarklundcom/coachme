@@ -6,6 +6,15 @@ it holds the coaching logic this plan implements. Delivery architecture is settl
 
 ---
 
+## ⚠️ D0 — before anything else (owner, 30 seconds)
+
+**Make this repo private.** GitHub → `coachme` → Settings → General → Danger zone →
+Change visibility. `data/portfolio.json` is your business situation and this repo is
+currently public. Everything (Claude access, PRs, Routines) works identically on a
+private repo. No hosting alternative is needed for privacy — the dashboard Artifact
+is already private to your Claude account, and nothing in this system is ever
+deployed to a server (see README "How you actually use it").
+
 ## ⚠️ Business decisions needed from the owner
 
 Answer these on the dashboard once PR-3 ships, or in any session before then.
@@ -89,6 +98,32 @@ whatever batch D2 puts together). The build should be sequenced so that runbooks
 (PR-2) and the booking nudge (PR-4) exist before any polish does.
 
 ---
+
+## Handoff note to the build model (Opus/Sonnet)
+
+You are building `antonmarklundcom/coachme` from this plan. Ground rules:
+
+1. Read `DESIGN.md` in full before writing code — it is the spec; this file is the
+   sequence. Do not redesign the delivery architecture (repo + live-doc Artifact +
+   Routine); it is settled.
+2. One PR per numbered step, in order, on a fresh branch from `main`. Each PR's
+   "Done when" line is its acceptance test — demonstrate it in the PR description.
+3. Plain Node.js, no framework, no server, no build step. Scripts must run with
+   `node src/<file>.js` and be unit-testable with `node --test`.
+4. Never write real credentials, IPs-with-passwords, or artifact-session tokens into
+   the repo or the dashboard HTML. Placeholders only (`<PASTE_PASSWORD>`).
+5. Owner decisions D1–D6 are logged at the top of this file. If unanswered when you
+   need one, use its listed default and note the assumption in the PR — do not stall.
+6. PR-3's artifact must declare `capabilities: {artifact: {}}` (live-doc mode) and be
+   published from the session with the `Artifact` tool; store the resulting permanent
+   URL in `data/config.json`. Load the `artifact-design` skill before writing the
+   dashboard HTML, and follow the live-doc rules (server-rendered content is the
+   document; user gestures persist; per-viewer UI in `<artifact-local>`).
+7. PR-2 needs read access to the 12 DB-blocked repos — attach them with `add_repo`
+   as you go. Use the `nextjs-deploy-hostinger` skill as the source of truth for
+   Hostinger runbook steps.
+8. PR-4 creates the daily Routine via `create_trigger` (fresh-session mode, push
+   notification on). Convert the owner's local nudge time to UTC.
 
 ## Owner-vs-agent split, summarized
 
