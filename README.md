@@ -23,6 +23,8 @@ honest about where attention should go.
 | `DESIGN.md` | Diagnosis of the pattern + the full coaching logic: live-doc structure, nudge triggers and cadence, anti-annoyance rules, what each Routine run computes |
 | `PLAN.md` | PR-numbered build plan with the owner-vs-agent split and the business decisions needed before/while building |
 | `data/portfolio.json` | State of record for all 53 repos, seeded from the 2026-08 read-only audit |
+| `data/decisions.json` | The quick-decisions inbox: D1–D6 with their recommended answers |
+| `data/config.json` | The dashboard's permanent Artifact URL and the hPanel burn-down baseline |
 | `data/stacks.json` | Scanned stack metadata for the DB-blocked repos (engine, dialect, migration/seed commands) — never credentials |
 | `data/nudges.json` | Nudge history for the anti-annoyance state machine |
 | `runbooks/` | Generated per-repo DB/hosting setup runbooks (PR-2 output) — placeholders only, never real credentials |
@@ -66,8 +68,16 @@ node src/runbook.js                              # regenerate every runbooks/*.m
 node src/runbook.js besikt                       # print one runbook
 node src/runbook.js --scan ../antonmarklundcom   # re-read the target repos' stacks
 
+node src/render.js                               # write dist/dashboard.html
+node src/harvest.js <fetched-page.html>          # show what the page's ticks would change
+node src/harvest.js <fetched-page.html> --apply  # write them into portfolio.json
+
 npm test                     # node --test
 ```
+
+The dashboard's permanent URL lives in `data/config.json`. `render.js` writes the
+page; publishing it is a session action (the Artifact tool, `capabilities: {artifact: {}}`),
+never something a script does — nothing here touches the network.
 
 `runbook.js` is deliberately split in two: `--scan` reads local clones of the target
 repos and records their stack in `data/stacks.json`; everything else is pure,

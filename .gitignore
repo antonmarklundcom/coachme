@@ -141,3 +141,6 @@ dist
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
 .vite/
+
+# Rendered dashboard — a build product of data/portfolio.json + templates/
+dist/
