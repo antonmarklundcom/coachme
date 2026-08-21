@@ -201,6 +201,12 @@
     background: var(--ground); color: var(--ink); border: 1px solid var(--line); padding: .5rem .55rem;
   }
   input.text::placeholder { color: var(--ink-3); }
+  .scope-head { display: flex; align-items: baseline; gap: .5rem; padding: .6rem .7rem .1rem; flex-wrap: wrap; }
+  details.dormant > summary {
+    cursor: pointer; font-size: .82rem; color: var(--ink-3); padding: .4rem 0;
+    text-transform: uppercase; letter-spacing: .07em;
+  }
+  details.dormant > ul { margin-top: .5rem; }
   .decision.drift { border-left: 3px solid var(--accent); }
   .decision.drift .rec { border-left-color: var(--accent); }
   .tag.good { color: var(--good); border-color: var(--good); background: var(--good-soft); }
@@ -235,8 +241,8 @@
   <div class="momentum">
     <div class="stats">
       <div class="stat"><b>{{momentum.launches}}</b><span>launches / 30d</span></div>
-      <div class="stat"><b>{{momentum.sessions}}</b><span>DB sessions</span></div>
-      <div class="stat"><b>{{momentum.streak}}</b><span>day streak</span></div>
+      <div class="stat"><b>{{momentum.sessions}}</b><span>DB sessions done</span></div>
+      <div class="stat"><b>{{momentum.streak}}</b><span>days, nothing dropped</span></div>
     </div>
     <div class="burn">
       <div class="row">
@@ -378,23 +384,37 @@
     <ul class="rows">
       {{#scope}}
       <li>
+        <div class="scope-head">
+          <span class="repo-name">{{name}}</span>
+          <span class="pct">{{pct}}%</span>
+          {{#has_proposal}}<span class="tag">no answer twice — proposed: {{proposed}}</span>{{/has_proposal}}
+        </div>
         <label class="row">
           <input type="checkbox" data-act="scope" data-repo="{{name}}" data-choice="keep">
-          <span class="repo-name">{{name}}</span>
-          <span class="meta"><span class="pct">{{pct}}%</span><span class="tag">keep</span></span>
-          {{#has_proposal}}<span class="unblocks flag">no answer twice — proposed: {{proposed}}</span>{{/has_proposal}}
+          Keep it
         </label>
         <label class="row">
           <input type="checkbox" data-act="scope" data-repo="{{name}}" data-choice="snooze">
-          <span class="repo-name">snooze 90 days</span>
+          Snooze 90 days
         </label>
         <label class="row">
           <input type="checkbox" data-act="scope" data-repo="{{name}}" data-choice="kill">
-          <span class="repo-name">kill</span>
+          Kill — a flag here, nothing archived on GitHub
         </label>
       </li>
       {{/scope}}
     </ul>
+
+    {{#dormant_count}}
+    <details class="dormant">
+      <summary>{{dormant_count}} repos you have put down</summary>
+      <ul class="readonly">
+        {{#dormant}}
+        <li><span class="repo-name">{{name}}</span><span class="meta">{{state}}</span></li>
+        {{/dormant}}
+      </ul>
+    </details>
+    {{/dormant_count}}
   </section>
 
   <footer>

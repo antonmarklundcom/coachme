@@ -20,6 +20,7 @@ import { join } from 'node:path';
 import { ROOT, load, save, NUDGES_PATH } from './portfolio.js';
 import { harvest } from './harvest.js';
 import { selectNudge, resolveOutcomes, applyDecision, isoDate } from './select.js';
+import { applyScopeAnswers, wakeSnoozed } from './scope.js';
 import { buildModel, renderDashboard, CONFIG_PATH, DECISIONS_PATH, DIST_DIR } from './render.js';
 
 const readJson = (p, fallback) => (existsSync(p) ? JSON.parse(readFileSync(p, 'utf8')) : fallback);
@@ -33,10 +34,15 @@ export function runDaily({ portfolio, nudges, config, decisions, html = null, da
   const { changes } = html ? harvest(html, portfolio, { date }) : { changes: [] };
   const touched = changes.map((c) => c.split(':')[0].trim()).filter((name) => portfolio.repos.some((r) => r.name === name));
 
-  // 2. resolve yesterday's pending nudges against that
+  // 2. settle anything the harvest answered, and wake repos whose snooze ran out
+  const scopeChanges = applyScopeAnswers(portfolio, { date });
+  const woken = wakeSnoozed(portfolio, { date });
+  changes.push(...scopeChanges, ...woken.map((n) => `${n}: snooze expired`));
+
+  // 3. resolve yesterday's pending nudges against what the owner did
   const resolved = resolveOutcomes(nudges, { date, touched, interacted: changes.length > 0 });
 
-  // 3. select today's nudge, 4. apply its effects
+  // 4. select today's nudge and apply its effects
   const decision = selectNudge(portfolio, nudges, { date, decisions });
   applyDecision(portfolio, nudges, decision);
 

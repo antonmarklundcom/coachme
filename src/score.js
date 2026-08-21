@@ -19,6 +19,7 @@ import {
   unblockedBy,
   dbBlockedRepos,
 } from './portfolio.js';
+import { isDormant } from './scope.js';
 
 /**
  * Default coefficients. Tuning these is expected; breaking the domination
@@ -132,9 +133,15 @@ export function scoreRepo(repo, portfolio, { coef = DEFAULT_COEFFICIENTS, now = 
   };
 }
 
-/** Every repo, scored, highest first. Ties break by % then name, for stability. */
-export function rank(portfolio, opts = {}) {
+/**
+ * Every repo, scored, highest first. Ties break by % then name, for stability.
+ * Killed and snoozed repos are out: the owner has said, in as many words, that
+ * they do not want to be shown these.
+ */
+export function rank(portfolio, { date = null, ...opts } = {}) {
+  const today = date ?? new Date(opts.now ?? Date.now()).toISOString().slice(0, 10);
   return portfolio.repos
+    .filter((repo) => !isDormant(repo, today))
     .map((repo) => ({ repo, ...scoreRepo(repo, portfolio, opts) }))
     .sort((a, b) => b.total - a.total || b.repo.pct - a.repo.pct || a.repo.name.localeCompare(b.repo.name));
 }
@@ -202,6 +209,7 @@ export function dbBatches(portfolio, { size = 3, ...opts } = {}) {
   const groups = new Map();
 
   for (const repo of dbBlockedRepos(portfolio)) {
+    if (!scored.has(repo.name)) continue; // dormant
     const key = batchKey(repo);
     if (!groups.has(key)) groups.set(key, []);
     groups.get(key).push(scored.get(repo.name));
