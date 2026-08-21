@@ -1,0 +1,51 @@
+{
+  "meta": {
+    "purpose": "The quick-decisions inbox (DESIGN.md §2.3). Each item carries the recommended answer pre-filled; the owner scans, ticks Accept, and corrects at most one.",
+    "source": "PLAN.md — Business decisions needed from the owner"
+  },
+  "decisions": [
+    {
+      "id": "D1",
+      "question": "Daily nudge time and timezone",
+      "needed_for": "PR-4 (the Routine's cron is UTC)",
+      "recommended": "08:00 Europe/Stockholm (= 06:00 UTC in summer, 07:00 UTC in winter)",
+      "why": "Blocks the Routine. Everything else has a safe default; this one decides when the coach speaks."
+    },
+    {
+      "id": "D2",
+      "question": "Which of the three Hostinger accounts hosts which DB-blocked repo",
+      "needed_for": "PR-2 batching — which repos share one hPanel sitting",
+      "recommended": "Batch by market (SE vs PY) as a proxy until you say otherwise",
+      "why": "Batching is only worth it if the repos really sit in the same panel. The proxy currently puts besikt alone in a 25-minute sitting; the truth probably merges it with something."
+    },
+    {
+      "id": "D3",
+      "question": "Confirm the proposed tiers in data/portfolio.json",
+      "needed_for": "PR-1 scoring — the biggest single ranking lever",
+      "recommended": "Keep as seeded: vendercrm, facturar, qr, propia.node, contabilidad = infra; everything else revenue or experiment",
+      "why": "Tier is set once and rarely touched. Getting it wrong quietly mis-ranks the queue for months."
+    },
+    {
+      "id": "D4",
+      "question": "May the coach propose archiving repos, and does \"kill\" mean GitHub-archive or just a flag?",
+      "needed_for": "PR-6 scope review",
+      "recommended": "Propose yes; execution always needs your explicit tick; \"kill\" sets a flag only, nothing is archived on GitHub",
+      "why": "Decides how much authority the monthly scope review has."
+    },
+    {
+      "id": "D5",
+      "question": "Weekly deep-audit depth",
+      "needed_for": "PR-5",
+      "recommended": "GitHub-API-only weekly, with a monthly clone-and-read pass",
+      "why": "API-only is cheap and the % estimates drift slowly; the monthly deep pass catches what the API cannot see."
+    },
+    {
+      "id": "D6",
+      "question": "Classify the owner-setup-unclassified blockers — one line each: what exactly is the next owner step?",
+      "needed_for": "Queue accuracy",
+      "recommended": "Answer the batch below — these repos rank on % alone until they are classified",
+      "why": "15 repos, several at 85–95%, are currently ranked with a pessimistic 25-minute guess. One line each turns them into bookable sessions.",
+      "batch": true
+    }
+  ]
+}

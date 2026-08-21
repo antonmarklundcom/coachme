@@ -253,8 +253,12 @@ const SECRET_PATTERNS = [
 ];
 
 export function assertNoSecrets(text, where = 'runbook') {
+  // The same text is checked before and after HTML escaping (the dashboard
+  // inlines runbooks), and `<PASTE_…>` placeholders arrive as `&lt;PASTE_…&gt;`
+  // there. Decode first, or every placeholder reads as a populated secret.
+  const decoded = text.replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&');
   for (const { name, re } of SECRET_PATTERNS) {
-    const m = re.exec(text);
+    const m = re.exec(decoded);
     if (m) throw new Error(`${where}: refusing to emit — looks like a ${name}: ${JSON.stringify(m[0].slice(0, 60))}`);
   }
   return text;

@@ -1,0 +1,383 @@
+<title>Final Mile</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700&family=Source+Sans+3:ital,wght@0,400;0,600;1,400&family=JetBrains+Mono:wght@400;500&display=swap">
+
+<style>
+  /* Light is the base palette; the two blocks below only re-point tokens, so
+     the un-stamped "system" state and both explicit stamps all resolve. */
+  :root {
+    --ground: #f3f6f8;
+    --surface: #ffffff;
+    --sunk: #e8edf2;
+    --ink: #121a22;
+    --ink-2: #55616e;
+    --ink-3: #7c8794;
+    --line: #d8e0e8;
+    --accent: #a8410b;
+    --accent-ink: #ffffff;
+    --accent-soft: #fcefe5;
+    --good: #146a47;
+    --good-soft: #e3f2ea;
+    --cool: #3a5a83;
+    --shadow: 0 1px 2px rgba(18, 26, 34, .06), 0 8px 24px -16px rgba(18, 26, 34, .3);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --ground: #0d1117;
+      --surface: #151c25;
+      --sunk: #101822;
+      --ink: #e6ecf3;
+      --ink-2: #94a2b2;
+      --ink-3: #6f7d8c;
+      --line: #232f3c;
+      --accent: #f09a4e;
+      --accent-ink: #1a1005;
+      --accent-soft: #2a1c11;
+      --good: #55c493;
+      --good-soft: #12291f;
+      --cool: #86a8d4;
+      --shadow: 0 1px 2px rgba(0, 0, 0, .4), 0 8px 24px -16px rgba(0, 0, 0, .8);
+    }
+  }
+  :root[data-theme="dark"] {
+    --ground: #0d1117;
+    --surface: #151c25;
+    --sunk: #101822;
+    --ink: #e6ecf3;
+    --ink-2: #94a2b2;
+    --ink-3: #6f7d8c;
+    --line: #232f3c;
+    --accent: #f09a4e;
+    --accent-ink: #1a1005;
+    --accent-soft: #2a1c11;
+    --good: #55c493;
+    --good-soft: #12291f;
+    --cool: #86a8d4;
+    --shadow: 0 1px 2px rgba(0, 0, 0, .4), 0 8px 24px -16px rgba(0, 0, 0, .8);
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--ground);
+    color: var(--ink);
+    font: 400 16px/1.55 "Source Sans 3", ui-sans-serif, system-ui, sans-serif;
+    -webkit-text-size-adjust: 100%;
+    accent-color: var(--accent);
+  }
+
+  .page {
+    max-width: 44rem;
+    margin: 0 auto;
+    padding: 1.25rem 1rem 4rem;
+    display: flex;
+    flex-direction: column;
+    gap: 2.25rem;
+  }
+
+  h1, h2, h3, h4 { font-family: Archivo, ui-sans-serif, system-ui, sans-serif; text-wrap: balance; margin: 0; }
+  a { color: var(--accent); }
+
+  /* ---------------------------------------------------------- masthead */
+  .masthead { display: flex; flex-direction: column; gap: .35rem; }
+  .masthead h1 { font-size: 1.5rem; font-weight: 700; letter-spacing: -.01em; }
+  .masthead p { margin: 0; color: var(--ink-2); font-size: .95rem; }
+  .stamp {
+    font-family: "JetBrains Mono", ui-monospace, monospace;
+    font-size: .72rem; color: var(--ink-3); letter-spacing: .02em;
+  }
+
+  /* ---------------------------------------------------------- momentum */
+  .momentum { display: flex; flex-direction: column; gap: .6rem; }
+  .stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1px; background: var(--line); border: 1px solid var(--line); }
+  .stat { background: var(--surface); padding: .6rem .7rem; display: flex; flex-direction: column; gap: .1rem; }
+  .stat b {
+    font-family: Archivo, sans-serif; font-size: 1.35rem; font-weight: 600;
+    font-variant-numeric: tabular-nums; line-height: 1.1;
+  }
+  .stat span { font-size: .68rem; text-transform: uppercase; letter-spacing: .07em; color: var(--ink-3); }
+  .burn { display: flex; flex-direction: column; gap: .3rem; }
+  .burn .row { display: flex; justify-content: space-between; align-items: baseline; gap: 1rem; }
+  .burn .label { font-size: .68rem; text-transform: uppercase; letter-spacing: .07em; color: var(--ink-3); }
+  .burn .value { font-family: "JetBrains Mono", monospace; font-size: .85rem; font-variant-numeric: tabular-nums; }
+  .meter { height: 8px; background: var(--sunk); border: 1px solid var(--line); overflow: hidden; }
+  .meter > i { display: block; height: 100%; background: var(--good); }
+
+  /* ----------------------------------------------------------- section */
+  section { display: flex; flex-direction: column; gap: .9rem; }
+  .eyebrow {
+    display: flex; align-items: baseline; gap: .6rem;
+    font-size: .7rem; text-transform: uppercase; letter-spacing: .1em;
+    color: var(--ink-3); border-bottom: 1px solid var(--line); padding-bottom: .4rem;
+  }
+  .eyebrow b { font-family: Archivo, sans-serif; font-weight: 600; color: var(--ink-2); letter-spacing: .1em; }
+  .eyebrow em { font-style: normal; margin-left: auto; font-family: "JetBrains Mono", monospace; letter-spacing: 0; }
+  .note { margin: 0; color: var(--ink-2); font-size: .9rem; }
+
+  /* -------------------------------------------------------- one thing */
+  .onething {
+    background: var(--accent-soft);
+    border: 1px solid var(--line);
+    border-top: 3px solid var(--accent);
+    padding: 1.1rem 1rem 1.2rem;
+    display: flex; flex-direction: column; gap: .85rem;
+    box-shadow: var(--shadow);
+  }
+  .onething h2 { font-size: 1.22rem; font-weight: 700; line-height: 1.3; }
+  .onething .why { margin: 0; font-size: .93rem; color: var(--ink-2); max-width: 40ch; }
+
+  .acts { display: flex; flex-direction: column; gap: .55rem; }
+  label.act {
+    display: flex; align-items: center; gap: .6rem;
+    background: var(--surface); border: 1px solid var(--line);
+    padding: .6rem .7rem; cursor: pointer; font-weight: 600; font-size: .95rem;
+    min-height: 44px;
+  }
+  label.act.quiet { font-weight: 400; color: var(--ink-2); }
+  label.act input[type="checkbox"] { width: 20px; height: 20px; margin: 0; flex: none; }
+  label.act .when {
+    margin-left: auto; font: 400 .88rem/1 "JetBrains Mono", monospace;
+    background: var(--sunk); border: 1px solid var(--line); color: var(--ink);
+    padding: .45rem .5rem; width: 9.5rem; max-width: 45%;
+  }
+  input:focus-visible, summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+  /* ------------------------------------------------------------ repos */
+  details.repo { background: var(--surface); border: 1px solid var(--line); }
+  details.repo > summary {
+    list-style: none; cursor: pointer; padding: .65rem .7rem;
+    display: flex; align-items: center; gap: .55rem; min-height: 44px;
+  }
+  details.repo > summary::-webkit-details-marker { display: none; }
+  details.repo > summary::after { content: "▸"; margin-left: auto; color: var(--ink-3); }
+  details.repo[open] > summary::after { content: "▾"; }
+  .repo-name { font-family: "JetBrains Mono", monospace; font-size: .9rem; font-weight: 500; }
+  .pct { font-family: "JetBrains Mono", monospace; font-size: .78rem; color: var(--ink-2); font-variant-numeric: tabular-nums; }
+  .runbook { padding: 0 .8rem 1rem; border-top: 1px solid var(--line); font-size: .88rem; color: var(--ink-2); overflow-x: auto; }
+  .runbook h3, .runbook h4 { font-size: .82rem; text-transform: uppercase; letter-spacing: .06em; color: var(--ink); margin: 1.1rem 0 .4rem; }
+  .runbook p { margin: .5rem 0; }
+  .runbook ol, .runbook ul { margin: .4rem 0; padding-left: 1.2rem; }
+  .runbook li { margin: .25rem 0; }
+  .runbook code { font-family: "JetBrains Mono", monospace; font-size: .84em; background: var(--sunk); padding: .1em .3em; }
+  .runbook pre {
+    background: var(--sunk); border: 1px solid var(--line); padding: .65rem .7rem;
+    overflow-x: auto; font-size: .8rem; line-height: 1.5;
+  }
+  .runbook pre code { background: none; padding: 0; }
+  .runbook blockquote {
+    margin: .6rem 0; padding: .1rem 0 .1rem .8rem;
+    border-left: 2px solid var(--accent); color: var(--ink-2);
+  }
+  .runbook table { border-collapse: collapse; font-size: .82rem; min-width: 100%; }
+  .runbook th, .runbook td { border: 1px solid var(--line); padding: .35rem .5rem; text-align: left; vertical-align: top; }
+
+  /* ------------------------------------------------------------ queue */
+  ul.rows { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 1px; background: var(--line); border: 1px solid var(--line); }
+  ul.rows > li { background: var(--surface); }
+  label.row {
+    display: flex; align-items: center; gap: .55rem; padding: .55rem .7rem;
+    cursor: pointer; min-height: 44px; flex-wrap: wrap;
+  }
+  label.row input[type="checkbox"] { width: 20px; height: 20px; margin: 0; flex: none; }
+  .row .meta { margin-left: auto; display: flex; align-items: center; gap: .5rem; }
+  .tag {
+    font: 500 .66rem/1.6 "JetBrains Mono", monospace; text-transform: uppercase; letter-spacing: .04em;
+    padding: 0 .35rem; border: 1px solid var(--line); color: var(--ink-2); background: var(--sunk);
+  }
+  .tag.db { color: var(--accent); border-color: var(--accent); background: var(--accent-soft); }
+  .unblocks { flex-basis: 100%; font-size: .78rem; color: var(--ink-3); padding-left: 1.7rem; }
+
+  /* -------------------------------------------------------- decisions */
+  .decision { background: var(--surface); border: 1px solid var(--line); padding: .8rem .8rem .85rem; display: flex; flex-direction: column; gap: .5rem; }
+  .decision h3 { font-size: .98rem; font-weight: 600; }
+  .decision .id { font-family: "JetBrains Mono", monospace; color: var(--accent); font-size: .8rem; margin-right: .4rem; }
+  .decision .rec { margin: 0; font-size: .92rem; padding: .5rem .6rem; background: var(--sunk); border-left: 2px solid var(--good); }
+  .decision .why { margin: 0; font-size: .84rem; color: var(--ink-3); }
+  .decision .needed { font-family: "JetBrains Mono", monospace; font-size: .72rem; color: var(--ink-3); }
+  input.text {
+    width: 100%; font: 400 .9rem/1.4 "Source Sans 3", sans-serif;
+    background: var(--ground); color: var(--ink); border: 1px solid var(--line); padding: .5rem .55rem;
+  }
+  input.text::placeholder { color: var(--ink-3); }
+  .classify-row { display: flex; flex-direction: column; gap: .35rem; padding: .6rem .7rem; }
+  .classify-row .head { display: flex; align-items: baseline; gap: .5rem; }
+
+  /* ------------------------------------------------------- agent lane */
+  .agent-note { color: var(--cool); }
+  ul.readonly { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 1px; background: var(--line); border: 1px solid var(--line); }
+  ul.readonly > li { background: var(--surface); display: flex; align-items: center; gap: .55rem; padding: .5rem .7rem; }
+  ul.readonly .meta { margin-left: auto; font-size: .78rem; color: var(--ink-3); }
+
+  footer { color: var(--ink-3); font-size: .8rem; border-top: 1px solid var(--line); padding-top: 1rem; display: flex; flex-direction: column; gap: .4rem; }
+
+  @media (min-width: 34rem) {
+    .page { padding: 2rem 1.5rem 5rem; }
+    .masthead h1 { font-size: 1.85rem; }
+    .onething h2 { font-size: 1.4rem; }
+  }
+  @media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
+</style>
+
+<div class="page">
+
+  <header class="masthead">
+    <h1>Final Mile</h1>
+    <p>One prepped session a day. Everything else on this page is context.</p>
+    <span class="stamp">refreshed {{generated}} · state of record: coachme/data/portfolio.json</span>
+  </header>
+
+  <div class="momentum">
+    <div class="stats">
+      <div class="stat"><b>{{momentum.launches}}</b><span>launches / 30d</span></div>
+      <div class="stat"><b>{{momentum.sessions}}</b><span>DB sessions</span></div>
+      <div class="stat"><b>{{momentum.streak}}</b><span>day streak</span></div>
+    </div>
+    <div class="burn">
+      <div class="row">
+        <span class="label">hPanel time left in the whole backlog</span>
+        <span class="value">{{momentum.remaining_h}} h / {{momentum.baseline_h}} h</span>
+      </div>
+      <div class="meter"><i style="width: {{momentum.burned_pct}}%"></i></div>
+    </div>
+  </div>
+
+  {{#has_today}}
+  <section>
+    <div class="eyebrow"><b>Today's one thing</b><em>{{today.minutes}} min</em></div>
+    <div class="onething">
+      <h2>{{today.headline}}</h2>
+      <p class="why">{{today.why}}</p>
+
+      <div class="acts">
+        <label class="act">
+          <input type="checkbox" data-act="booked" data-batch="{{today.batch_repos}}"{{#today.booked}} checked{{/today.booked}}>
+          Booked
+          <input class="when" type="text" data-act="when" placeholder="when?" value="{{today.booked_when}}">
+        </label>
+        <label class="act">
+          <input type="checkbox" data-act="done" data-batch="{{today.batch_repos}}"{{#today.done}} checked{{/today.done}}>
+          Done — all of it
+        </label>
+        <label class="act quiet">
+          <input type="checkbox" data-act="shrink" data-batch="{{today.batch_repos}}"{{#today.shrink}} checked{{/today.shrink}}>
+          Not today — shrink it to the smallest step
+        </label>
+      </div>
+
+      {{#today.repos}}
+      <details class="repo">
+        <summary>
+          <span class="repo-name">{{name}}</span>
+          <span class="pct">{{pct}}% · {{minutes}} min</span>
+        </summary>
+        <div class="runbook">
+          {{#runbook}}{{{runbook}}}{{/runbook}}
+          {{^runbook}}<p>No runbook generated for this repo yet — run <code>node src/runbook.js</code>.</p>{{/runbook}}
+        </div>
+      </details>
+      {{/today.repos}}
+    </div>
+  </section>
+  {{/has_today}}
+
+  <section>
+    <div class="eyebrow"><b>Launch queue</b><em>{{queue_count}} repos · {{queue_minutes}} min</em></div>
+    <p class="note">Owner-blocked and at least 70% finished, ranked by leverage. Tick a repo the moment its blocker is actually cleared — that is what moves it out of the queue.</p>
+    <ul class="rows">
+      {{#queue}}
+      <li>
+        <label class="row">
+          <input type="checkbox" data-act="clear" data-repo="{{name}}" data-blocker="{{blocker}}">
+          <span class="repo-name">{{name}}</span>
+          <span class="meta">
+            <span class="pct">{{pct}}%</span>
+            <span class="tag{{#is_db}} db{{/is_db}}">{{blocker}}</span>
+            <span class="pct">{{minutes}}m</span>
+          </span>
+          {{#has_unblocks}}<span class="unblocks">unblocks {{unblocks}}</span>{{/has_unblocks}}
+        </label>
+      </li>
+      {{/queue}}
+    </ul>
+  </section>
+
+  <section>
+    <div class="eyebrow"><b>Quick decisions</b><em>{{decisions_pending}} pending</em></div>
+    <p class="note">Recommended answers are pre-filled. Scan, tick, correct at most one, done.</p>
+    {{#decisions}}
+    <div class="decision">
+      <h3><span class="id">{{id}}</span>{{question}}</h3>
+      <p class="rec">{{recommended}}</p>
+      <p class="why">{{why}}</p>
+      <span class="needed">needed for: {{needed_for}}</span>
+      <label class="act">
+        <input type="checkbox" data-act="accept" data-id="{{id}}"{{#accepted}} checked{{/accepted}}>
+        Accept
+      </label>
+      <input class="text" type="text" data-act="note" data-id="{{id}}" placeholder="or correct it here" value="{{note}}">
+    </div>
+    {{/decisions}}
+
+    <div class="eyebrow" style="margin-top:.6rem"><b>D6 — classify the blockers</b><em>{{classify_count}} repos</em></div>
+    <p class="note">One line each: what exactly is the next step you have to take? Until these are answered they are priced at a pessimistic 25 minutes and rank below every known DB task.</p>
+    <ul class="rows">
+      {{#classify}}
+      <li>
+        <div class="classify-row">
+          <div class="head"><span class="repo-name">{{name}}</span><span class="pct">{{pct}}%</span></div>
+          <input class="text" type="text" data-act="classify" data-repo="{{name}}" placeholder="next owner step…" value="{{note}}">
+        </div>
+      </li>
+      {{/classify}}
+    </ul>
+  </section>
+
+  <section>
+    <div class="eyebrow"><b>Agent lane</b><em>read-only</em></div>
+    <p class="note agent-note">Repos an agent can push without you. Nothing to do here — it is the proof that the portfolio keeps moving while you sit the 20-minute session.</p>
+    <ul class="readonly">
+      {{#agent}}
+      <li>
+        <span class="repo-name">{{name}}</span>
+        <span class="pct">{{pct}}%</span>
+        <span class="meta">{{last}}</span>
+      </li>
+      {{/agent}}
+    </ul>
+  </section>
+
+  <section>
+    <div class="eyebrow"><b>Scope review</b><em>monthly</em></div>
+    {{#scope_empty}}
+    <p class="note">Nothing due. Repos land here once they have gone 30 days untouched — then it is keep, snooze 90 days, or kill, and nothing is archived without your tick.</p>
+    {{/scope_empty}}
+    <ul class="rows">
+      {{#scope}}
+      <li>
+        <label class="row">
+          <input type="checkbox" data-act="scope" data-repo="{{name}}" data-choice="keep">
+          <span class="repo-name">{{name}}</span>
+          <span class="meta"><span class="pct">{{pct}}%</span><span class="tag">keep</span></span>
+        </label>
+        <label class="row">
+          <input type="checkbox" data-act="scope" data-repo="{{name}}" data-choice="snooze">
+          <span class="repo-name">snooze 90 days</span>
+        </label>
+        <label class="row">
+          <input type="checkbox" data-act="scope" data-repo="{{name}}" data-choice="kill">
+          <span class="repo-name">kill</span>
+        </label>
+      </li>
+      {{/scope}}
+    </ul>
+  </section>
+
+  <footer>
+    <span>Every tick here is read back into <code>data/portfolio.json</code> on the next run, before this page is regenerated. The page is a projection; the repo is the record.</span>
+    <span>No credentials on this page, ever. Runbooks use placeholders — real values stay in your password manager.</span>
+    <span>{{owner_minutes_total}} owner-minutes of blockers across the whole portfolio.</span>
+  </footer>
+
+</div>
