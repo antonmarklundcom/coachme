@@ -22,7 +22,7 @@ Only **D1–D2 block a PR**; the rest have safe defaults the build proceeds with
 
 | # | Decision | Needed for | Default until answered |
 |---|---|---|---|
-| **D1** | Daily nudge time **and your timezone** (Sweden? Paraguay? split?) | PR-4 (Routine cron is UTC) | 08:00 Europe/Stockholm |
+| **D1** | ✅ **ANSWERED 2026-08-21:** 08:00 America/Asunción (owner relocating to Paraguay for 10+ months). Cron `0 11 * * *` UTC, no DST drift. | PR-4 | — |
 | **D2** | Which Hostinger account (of the 3) hosts which of the ~12 DB-blocked repos | PR-2 batching (which repos share one hPanel sitting) | Batch by market (SE vs PY) as a proxy |
 | **D3** | Confirm/correct proposed tiers in `data/portfolio.json` (`infra` / `revenue` / `experiment`) — biggest ranking lever | PR-1 scoring | Proposals as seeded: vendercrm, facturar, qr, propia.node, contabilidad = infra |
 | **D4** | May the coach *propose* archiving repos in scope reviews, and does "kill" mean GitHub-archive or just a `killed` flag? | PR-6 | Propose yes; execution always requires your explicit tick; "kill" = flag only |
