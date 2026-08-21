@@ -44,9 +44,10 @@ export const BLOCKED_SCANS_LIMIT = 3;
  * `{ pushed_at, archived }`. Everything else waits for its next push.
  *
  * A repo is deep-scanned when it has never been scanned, when it has been
- * pushed to since its last scan, or when its recorded state is old enough that
- * a re-read is worth it anyway (`maxAgeDays`) — that last one catches repos
- * whose progress happened outside git, and repos the audit guessed at.
+ * pushed to since its last scan, when the audit never worked out what blocks it,
+ * or when its recorded state is old enough that a re-read is worth it anyway
+ * (`maxAgeDays`) — that last one catches repos whose progress happened outside
+ * git, and repos the audit guessed at.
  */
 export function planScan(portfolio, remote = {}, { now = Date.now(), force = [], maxAgeDays = 30 } = {}) {
   // The 2026-08 audit is valid seed data: the first real scan is an incremental
@@ -68,6 +69,15 @@ export function planScan(portfolio, remote = {}, { now = Date.now(), force = [],
     }
     if (force.includes(repo.name)) {
       deep.push({ name: repo.name, why: 'forced' });
+      continue;
+    }
+    // The audit could not say what these repos actually need (Decision D6), and
+    // several of them sit at 85-95%. Waiting for a push that may never come
+    // would leave the queue ranking them on percentage alone for weeks. Read
+    // them on the first scan that can; `last_scan` then stops the forcing, so a
+    // repo the scan still cannot classify is asked about, not re-read forever.
+    if (repo.blocker === 'owner-setup-unclassified' && !repo.last_scan) {
+      deep.push({ name: repo.name, why: 'blocker never classified' });
       continue;
     }
     const since = repo.last_scan ?? baseline;

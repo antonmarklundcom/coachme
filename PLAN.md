@@ -15,6 +15,28 @@ private repo. No hosting alternative is needed for privacy — the dashboard Art
 is already private to your Claude account, and nothing in this system is ever
 deployed to a server (see README "How you actually use it").
 
+## Status — 2026-08-21
+
+**All six build PRs are merged** (#2–#7, plus #8 for the timezone answer). Both
+Routines are live and enabled: daily `0 11 * * *` UTC, scan Mon/Thu `0 10 * * 1,4`
+UTC, both on Sonnet, dashboard published at `data/config.json` → `artifact_url`.
+`npm test` is green and now runs in CI on every push and PR.
+
+Nothing in the plan is waiting on more code. What is left is yours:
+
+| Open | Whose | Cost |
+|---|---|---|
+| **D0 — make this repo private.** It is still public and `data/portfolio.json` is your business situation. | owner | 30 s |
+| **D2 — which Hostinger account holds which repo.** Until then batches are grouped by market as a proxy, which is why `qr + facturar + ecom` are batched together. | owner | 2 min |
+| **D3 — confirm the seeded tiers.** Silence keeps them as seeded. | owner | 2 min |
+| D6 — classify the 15 `owner-setup-unclassified` repos | now the coach's | — |
+| **The first booked DB session** — the thing the whole repo exists for. | owner | 45 min |
+
+D6 no longer waits for you: the scan deep-reads a repo whose blocker the audit
+never classified, without waiting for a push it may never get (`planScan`). The
+Monday scan reads all 15 and writes what it finds; you correct what it got wrong
+instead of writing 15 lines from scratch.
+
 ## ⚠️ Business decisions needed from the owner
 
 Answer these on the dashboard once PR-3 ships, or in any session before then.
