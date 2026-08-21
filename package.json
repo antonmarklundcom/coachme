@@ -1,0 +1,12 @@
+{
+  "name": "coachme",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Portfolio focus coach — state of record, leverage scoring, live-doc dashboard, daily nudge Routine.",
+  "scripts": {
+    "queue": "node src/score.js",
+    "test": "node --test test/*.test.js"
+  },
+  "engines": { "node": ">=20" }
+}

@@ -1,0 +1,30 @@
+{
+  "meta": {
+    "purpose": "Nudge history for the anti-annoyance state machine (DESIGN.md §3). Written by the daily Routine, read by src/select.js (PR-4).",
+    "nudge_types": [
+      "db-session",
+      "booked-reminder",
+      "quick-decisions",
+      "scope-review",
+      "launch-verify",
+      "shrunk",
+      "question"
+    ],
+    "outcomes": ["pending", "acted", "ignored", "snoozed", "shrunk"],
+    "caps": {
+      "max_per_day": 1,
+      "max_per_week": 5,
+      "silent_weekday": 0,
+      "max_consecutive_same_nudge": 2,
+      "repo_cooldown_days": 7
+    },
+    "record_shape": {
+      "date": "YYYY-MM-DD (local to the owner's timezone, Decision D1)",
+      "type": "one of nudge_types",
+      "repos": ["repo names the nudge was about"],
+      "outcome": "one of outcomes",
+      "note": "optional free text"
+    }
+  },
+  "history": []
+}
