@@ -167,17 +167,26 @@ function bookedCandidate(portfolio, date) {
 function inboxCandidate(portfolio, decisions, date) {
   const answered = portfolio.decisions ?? {};
   const pending = decisions.filter((d) => answered[d.id]?.accepted !== true && !answered[d.id]?.note);
-  if (!pending.length) return null;
+  // A scan-vs-tick disagreement is an inbox item too: it is a one-line question
+  // only the owner can answer, and it batches with the rest rather than
+  // interrupting on its own.
+  const drifted = portfolio.repos.filter((r) => r.drift_note);
+  if (!pending.length && !drifted.length) return null;
 
   const oldest = portfolio.decisions_surfaced ?? null;
   const stale = oldest ? daysBetween(date, oldest) >= CAPS.inboxMaxAgeDays : false;
-  if (pending.length < CAPS.inboxMinItems && !stale) return null;
+  const items = pending.length + drifted.length;
+  if (items < CAPS.inboxMinItems && !stale) return null;
+
+  const parts = [];
+  if (pending.length) parts.push(pending.map((d) => d.id).join(', '));
+  if (drifted.length) parts.push(`${drifted.length} to verify (${drifted.map((r) => r.name).join(', ')})`);
 
   return {
     type: 'quick-decisions',
-    repos: [],
-    title: `${pending.length} decisions, about three minutes`,
-    body: `${pending.map((d) => d.id).join(', ')} — each one has the recommended answer pre-filled. Scan, tick, correct at most one.`,
+    repos: drifted.map((r) => r.name),
+    title: `${items} decisions, about three minutes`,
+    body: `${parts.join('; ')} — the recommended answers are pre-filled. Scan, tick, correct at most one.`,
   };
 }
 

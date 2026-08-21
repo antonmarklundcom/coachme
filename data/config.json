@@ -4,5 +4,7 @@
   "hpanel_baseline_minutes": 195,
   "hpanel_baseline_note": "Batched cost of the DB backlog on 2026-08-21 (5 sittings). The burn-down bar measures against this, so it only ever goes down as sessions land.",
   "routine_trigger_id": "trig_014ds6SoBCiRm98xvAGrgm22",
-  "routine_note": "Daily, 0 6 * * * UTC = 08:00 Europe/Stockholm (D1 default). Fresh session per firing, push on. The prompt lives in ROUTINE.md \u2014 change it there first."
+  "routine_note": "Daily, 0 6 * * * UTC = 08:00 Europe/Stockholm (D1 default). Fresh session per firing, push on. The prompt lives in ROUTINE.md — change it there first.",
+  "scan_trigger_id": "trig_01XQQ4jKSFWexmu6XbpqHo69",
+  "scan_note": "Mon+Thu, 0 5 * * 1,4 UTC — an hour before the daily nudge, push off. Incremental: only repos pushed since their last scan are deep-read. Prompt lives in SCAN.md."
 }

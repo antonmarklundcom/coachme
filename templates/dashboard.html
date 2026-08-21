@@ -201,6 +201,10 @@
     background: var(--ground); color: var(--ink); border: 1px solid var(--line); padding: .5rem .55rem;
   }
   input.text::placeholder { color: var(--ink-3); }
+  .decision.drift { border-left: 3px solid var(--accent); }
+  .decision.drift .rec { border-left-color: var(--accent); }
+  .tag.good { color: var(--good); border-color: var(--good); background: var(--good-soft); }
+  .unblocks.flag { color: var(--accent); }
   .classify-row { display: flex; flex-direction: column; gap: .35rem; padding: .6rem .7rem; }
   .classify-row .head { display: flex; align-items: baseline; gap: .5rem; }
 
@@ -296,6 +300,9 @@
             <span class="tag{{#is_db}} db{{/is_db}}">{{blocker}}</span>
             <span class="pct">{{minutes}}m</span>
           </span>
+          {{#newly_blocked}}<span class="unblocks flag">new — this landed on you since the last scan</span>{{/newly_blocked}}
+          {{#stuck}}<span class="unblocks flag">stuck — blocked on you three scans running</span>{{/stuck}}
+          {{#next_step}}<span class="unblocks">next: {{next_step}}</span>{{/next_step}}
           {{#has_unblocks}}<span class="unblocks">unblocks {{unblocks}}</span>{{/has_unblocks}}
         </label>
       </li>
@@ -306,6 +313,17 @@
   <section>
     <div class="eyebrow"><b>Quick decisions</b><em>{{decisions_pending}} pending</em></div>
     <p class="note">Recommended answers are pre-filled. Scan, tick, correct at most one, done.</p>
+    {{#verify}}
+    <div class="decision drift">
+      <h3><span class="id">verify</span>{{name}}</h3>
+      <p class="rec">{{note}}</p>
+      <p class="why">The scan and your tick disagree. Nothing was changed either way — you settle it.</p>
+      <label class="act">
+        <input type="checkbox" data-act="verify" data-repo="{{name}}">
+        My tick was right — it really is done
+      </label>
+    </div>
+    {{/verify}}
     {{#decisions}}
     <div class="decision">
       <h3><span class="id">{{id}}</span>{{question}}</h3>
@@ -342,7 +360,11 @@
       <li>
         <span class="repo-name">{{name}}</span>
         <span class="pct">{{pct}}%</span>
-        <span class="meta">{{last}}</span>
+        <span class="meta">
+          {{#has_merged}}<span class="tag good">{{merged}} merged</span>{{/has_merged}}
+          {{#has_open}}<span class="tag">{{open_prs}} open</span>{{/has_open}}
+          {{last}}
+        </span>
       </li>
       {{/agent}}
     </ul>
@@ -360,6 +382,7 @@
           <input type="checkbox" data-act="scope" data-repo="{{name}}" data-choice="keep">
           <span class="repo-name">{{name}}</span>
           <span class="meta"><span class="pct">{{pct}}%</span><span class="tag">keep</span></span>
+          {{#has_proposal}}<span class="unblocks flag">no answer twice — proposed: {{proposed}}</span>{{/has_proposal}}
         </label>
         <label class="row">
           <input type="checkbox" data-act="scope" data-repo="{{name}}" data-choice="snooze">
