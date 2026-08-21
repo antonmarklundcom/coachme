@@ -23,6 +23,7 @@ honest about where attention should go.
 | `DESIGN.md` | Diagnosis of the pattern + the full coaching logic: live-doc structure, nudge triggers and cadence, anti-annoyance rules, what each Routine run computes |
 | `PLAN.md` | PR-numbered build plan with the owner-vs-agent split and the business decisions needed before/while building |
 | `data/portfolio.json` | State of record for all 53 repos, seeded from the 2026-08 read-only audit |
+| `data/nudges.json` | Nudge history for the anti-annoyance state machine |
 | `runbooks/` | Generated per-repo DB/hosting setup runbooks (PR-2 output) — placeholders only, never real credentials |
 
 ## How you actually use it (no hosting, ever)
@@ -50,6 +51,17 @@ not on a free host, no `coach.antonmarklund.com` subdomain, no DNS:
 - **No real credentials ever** enter this repo or the dashboard — runbooks use
   `<PASTE_PASSWORD>` placeholders; secrets live only in your password manager and
   local `.env` files on the machines that need them.
+
+## Running the scripts
+
+Plain Node (>=20), no dependencies, no build step:
+
+```
+node src/score.js            # ranked launch queue + the first proposed DB session
+node src/score.js --batches  # every proposed DB session
+node src/score.js --json     # machine-readable, for the Routine
+npm test                     # node --test
+```
 
 ## Operating principle
 
