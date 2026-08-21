@@ -21,6 +21,7 @@ honest about where attention should go.
 | File | What it is |
 |---|---|
 | `DESIGN.md` | Diagnosis of the pattern + the full coaching logic: live-doc structure, nudge triggers and cadence, anti-annoyance rules, what each Routine run computes |
+| `ROUTINE.md` | The daily Routine: its exact prompt, schedule, and why each step exists |
 | `PLAN.md` | PR-numbered build plan with the owner-vs-agent split and the business decisions needed before/while building |
 | `data/portfolio.json` | State of record for all 53 repos, seeded from the 2026-08 read-only audit |
 | `data/decisions.json` | The quick-decisions inbox: D1–D6 with their recommended answers |
@@ -71,6 +72,10 @@ node src/runbook.js --scan ../antonmarklundcom   # re-read the target repos' sta
 node src/render.js                               # write dist/dashboard.html
 node src/harvest.js <fetched-page.html>          # show what the page's ticks would change
 node src/harvest.js <fetched-page.html> --apply  # write them into portfolio.json
+
+node src/select.js                               # what would today's run do?
+node src/run.js --dry --date 2026-08-25          # a full run, writing nothing
+node src/run.js --page fetched.html              # a real run
 
 npm test                     # node --test
 ```

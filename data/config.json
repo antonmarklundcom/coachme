@@ -2,5 +2,7 @@
   "artifact_url": "https://claude.ai/code/artifact/ad43df74-0be6-4528-a578-8d34ccf05eb3",
   "artifact_note": "Set by the session that publishes the dashboard (PLAN.md PR-3). The Routine fetches this URL to harvest ticks before republishing.",
   "hpanel_baseline_minutes": 195,
-  "hpanel_baseline_note": "Batched cost of the DB backlog on 2026-08-21 (5 sittings). The burn-down bar measures against this, so it only ever goes down as sessions land."
+  "hpanel_baseline_note": "Batched cost of the DB backlog on 2026-08-21 (5 sittings). The burn-down bar measures against this, so it only ever goes down as sessions land.",
+  "routine_trigger_id": "trig_014ds6SoBCiRm98xvAGrgm22",
+  "routine_note": "Daily, 0 6 * * * UTC = 08:00 Europe/Stockholm (D1 default). Fresh session per firing, push on. The prompt lives in ROUTINE.md \u2014 change it there first."
 }
