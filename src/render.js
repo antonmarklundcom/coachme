@@ -144,6 +144,9 @@ export function buildModel(portfolio, { now = Date.now(), config = {}, decisions
       has_unblocks: e.unblocks.length > 0,
       is_db: e.repo.blocker === 'db-setup',
       unclassified: e.repo.blocker === 'owner-setup-unclassified',
+      next_step: e.repo.next_step ?? e.repo.blocker_note ?? '',
+      newly_blocked: !!e.repo.newly_blocked,
+      stuck: (e.repo.blocked_scans ?? 0) >= 3,
     })),
     queue_count: queue.length,
     queue_minutes: queue.reduce((s, e) => s + e.minutes, 0),
@@ -161,6 +164,12 @@ export function buildModel(portfolio, { now = Date.now(), config = {}, decisions
       note: r.blocker_note ?? '',
     })),
     classify_count: unclassified.length,
+    // Drift: the scan and a human tick disagree. Never resolved silently —
+    // the owner settles it (src/refresh.js).
+    verify: portfolio.repos
+      .filter((r) => r.drift_note)
+      .map((r) => ({ name: r.name, note: r.drift_note, since: r.drift_date ?? '' })),
+    verify_count: portfolio.repos.filter((r) => r.drift_note).length,
     agent: agentLane(portfolio)
       .filter((e) => e.repo.pct > 0)
       .slice(0, 12)
@@ -168,11 +177,23 @@ export function buildModel(portfolio, { now = Date.now(), config = {}, decisions
         name: e.repo.name,
         pct: e.repo.pct,
         lane: e.repo.lane.replace(/-/g, ' '),
-        last: relativeDays(e.repo.last_commit, now) ?? 'no commit data yet',
+        last: relativeDays(e.repo.last_commit, now) ?? 'not scanned yet',
+        // Merged PRs are the honest evidence that the lane is actually moving —
+        // a commit date can be a README typo, a merge is finished work.
+        merged: e.repo.merged_prs ?? 0,
+        has_merged: (e.repo.merged_prs ?? 0) > 0,
+        open_prs: e.repo.open_prs ?? 0,
+        has_open: (e.repo.open_prs ?? 0) > 0,
       })),
     scope: portfolio.repos
       .filter((r) => r.scope_review_due === true)
-      .map((r) => ({ name: r.name, pct: r.pct, choice: r.scope_review ?? '' })),
+      .map((r) => ({
+        name: r.name,
+        pct: r.pct,
+        choice: r.scope_review ?? '',
+        proposed: r.scope_review_proposed ?? '',
+        has_proposal: !!r.scope_review_proposed,
+      })),
     scope_empty: !portfolio.repos.some((r) => r.scope_review_due === true),
     owner_minutes_total: portfolio.repos.filter(isOwnerBlocked).reduce((s, r) => s + ownerMinutes(r), 0),
   };

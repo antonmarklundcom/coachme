@@ -12,6 +12,10 @@ honest about where attention should go.
 - **The dashboard** is a Claude Artifact in live-doc mode. Permanent URL, opens on
   phone or laptop. Checkboxes the owner ticks ("besikt DB done") persist and are read
   back by Claude on the next run via WebFetch.
+- **The scan** is a second Routine, Monday and Thursday, that re-reads only the repos
+  that have actually moved since their last scan and writes what it finds into
+  `data/portfolio.json`. It is silent by design — anything it learns that matters
+  reaches you through the daily nudge, not as a second notification.
 - **The nudge** is a scheduled Claude Code Routine that fires daily in a fresh session:
   it reads `data/portfolio.json` + the live-doc's checked state, decides whether
   today earns a push notification (max one), refreshes the dashboard, and re-arms.
@@ -21,6 +25,7 @@ honest about where attention should go.
 | File | What it is |
 |---|---|
 | `DESIGN.md` | Diagnosis of the pattern + the full coaching logic: live-doc structure, nudge triggers and cadence, anti-annoyance rules, what each Routine run computes |
+| `SCAN.md` | The twice-weekly repo scan: its prompt, why it is incremental, and what a scan may and may not change |
 | `ROUTINE.md` | The daily Routine: its exact prompt, schedule, and why each step exists |
 | `PLAN.md` | PR-numbered build plan with the owner-vs-agent split and the business decisions needed before/while building |
 | `data/portfolio.json` | State of record for all 53 repos, seeded from the 2026-08 read-only audit |
@@ -76,6 +81,10 @@ node src/harvest.js <fetched-page.html> --apply  # write them into portfolio.jso
 node src/select.js                               # what would today's run do?
 node src/run.js --dry --date 2026-08-25          # a full run, writing nothing
 node src/run.js --page fetched.html              # a real run
+
+node src/refresh.js --plan remote.json           # which repos need a deep scan
+node src/refresh.js --apply results.json         # merge a scan into the record
+node src/refresh.js --sweep                      # staleness + snooze proposals
 
 npm test                     # node --test
 ```

@@ -132,6 +132,21 @@ export function applyGestures(portfolio, gestures, { date = null } = {}) {
         repo.blocker_note = g.value;
         break;
       }
+      case 'verify': {
+        // The owner settled a scan-vs-tick disagreement in favour of the tick.
+        if (!g.repo) break;
+        let repo;
+        try {
+          repo = getRepo(portfolio, g.repo);
+        } catch {
+          break;
+        }
+        if (!repo.drift_note) break;
+        note(`${g.repo}: drift confirmed resolved`);
+        delete repo.drift_note;
+        delete repo.drift_date;
+        break;
+      }
       case 'scope': {
         if (!g.repo || !['keep', 'snooze', 'kill'].includes(g.choice)) break;
         let repo;
