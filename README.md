@@ -5,7 +5,41 @@ shrinking the activation energy of the final-mile ops step (Hostinger DB/hosting
 to a prepped, bookable, 20-minute copy-paste session — and keep the whole portfolio
 honest about where attention should go.
 
-## Architecture (settled — do not re-open)
+> **Superseded on 2026-08-28 by `plan.md`.** The coach is being rebuilt as a
+> Next.js app on Vercel with its state of record in Neon Postgres — the
+> *coaching logic* in `DESIGN.md` is unchanged, but the delivery architecture
+> below (Claude Artifact live-doc + Routines, "no hosting, ever") is history.
+> Read `plan.md` first; the sections below describe the first build and are kept
+> as the record of it.
+
+## Running the app
+
+```bash
+npm install
+cp .env.example .env.local     # fill in DATABASE_URL, OWNER_SECRET, CRON_SECRET, …
+npm run migrate                # apply migrations/*.sql
+npm run seed                   # one-time: data/*.json → Postgres (re-runnable)
+npm run dev                    # http://localhost:3000, gated by /login
+npm run queue                  # the ranked launch queue, from the database
+npm test                       # unit tests + the legacy script suite
+```
+
+The twice-weekly scan is `POST /api/scan` (and `GET`, which is how Vercel Cron
+fires it), gated on `Authorization: Bearer $CRON_SECRET`:
+
+```bash
+curl -X POST -H "Authorization: Bearer $CRON_SECRET" \
+  "http://localhost:3000/api/scan?cap=3&force=besikt"
+```
+
+| Path | What lives there |
+|---|---|
+| `app/` | Routes: the dashboard placeholder, `/login`, `/api/scan` |
+| `lib/` | `domain.ts` (vocabulary), `score.ts` (leverage scoring), `queries.ts` (every read/write), `auth.ts`, `scan/` |
+| `migrations/` | Plain SQL, applied in order by `npm run migrate` |
+| `scripts/` | `migrate.ts`, `seed.ts`, `queue.ts`, and `legacy/` — the pre-Vercel Node scripts, kept as the reference the ports were made from |
+
+## Architecture of the first build (historical)
 
 - **This repo** holds all logic and state: the portfolio state file, the leverage
   scoring, the runbook generator, and the live-doc renderer. No hosting, no Node slot.

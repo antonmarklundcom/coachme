@@ -144,3 +144,7 @@ vite.config.ts.timestamp-*
 
 # Rendered dashboard — a build product of data/portfolio.json + templates/
 dist/
+
+# Next.js / Vercel
+next-env.d.ts
+.vercel
