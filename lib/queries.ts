@@ -14,7 +14,7 @@ import {
   type Repo,
   unblockedLane,
 } from './domain';
-import { localDate, safeTimeZone } from './clock';
+import { addDays, localDate, safeTimeZone } from './clock';
 import type { NudgeOutcome, NudgeRecord, NudgeType } from './nudge/history';
 import type { OwnerAction } from './nudge/outcomes';
 import { dbBatches, launchQueue, agentLane, rank, type DbBatch, type ScoredRepo } from './score';
@@ -106,6 +106,37 @@ export async function clearBlocker(
   });
 }
 
+/** How long a snooze lasts (DESIGN.md §2.5), ported from scripts/legacy/src/scope.js. */
+export const SCOPE_SNOOZE_DAYS = 90;
+
+/**
+ * The scope-review answer (DESIGN.md §2.5): keep, snooze 90 days, or kill — a
+ * flag on this row only, never anything that touches GitHub (Decision D4).
+ * Clears the review-due state either way, which is what takes the repo off
+ * the scope-review nudge until it goes stale again.
+ */
+export async function applyScopeAnswer(
+  repo: Repo,
+  answer: 'keep' | 'snooze' | 'kill',
+  { date, note }: { date?: string; note?: string } = {}
+): Promise<void> {
+  const on = date ?? localDate(Date.now(), safeTimeZone((await getSettings()).owner_timezone));
+  const patch: Record<string, unknown> = {
+    scope_review_due: false,
+    scope_review_proposed: null,
+    scope_reviews_unanswered: 0,
+  };
+  if (answer === 'keep') {
+    patch.kept_at = on;
+    if (note) patch.notes = note;
+  } else if (answer === 'snooze') {
+    patch.snoozed_until = addDays(on, SCOPE_SNOOZE_DAYS);
+  } else {
+    patch.killed_at = on;
+  }
+  await updateRepo(repo.id, patch);
+}
+
 /* ------------------------------------------------------------------ settings */
 
 export interface Settings {
@@ -170,6 +201,23 @@ export async function getDecisions(status?: Decision['status']): Promise<Decisio
     created_at: asIso(row.created_at),
     resolved_at: row.resolved_at ? asIso(row.resolved_at) : null,
   })) as unknown as Decision[];
+}
+
+/**
+ * The quick-decisions inbox tick (DESIGN.md §2.3): "Accept" with no correction
+ * stores the pre-filled recommendation as the answer; typing a correction
+ * stores that instead. Either way the item leaves the pending list, which is
+ * what feeds the nudge ladder's inbox rung and getOwnerActions' evidence.
+ */
+export async function resolveDecision(
+  id: string,
+  input: { status: 'accepted' | 'corrected'; answer: string }
+): Promise<void> {
+  await query(`UPDATE decisions SET status = $2, answer = $3, resolved_at = now() WHERE id = $1`, [
+    id,
+    input.status,
+    input.answer,
+  ]);
 }
 
 /* -------------------------------------------------------------------- stacks */

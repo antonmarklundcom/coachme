@@ -10,6 +10,16 @@
  * Pure: the only clock is the one passed in.
  */
 
+/**
+ * `YYYY-MM-DD` for right now, as seen in `timeZone`. A thin wrapper so callers
+ * that just want "today" (dashboard rendering, mainly) don't call the impure
+ * `Date.now()` directly from a component body — React's purity lint flags that
+ * at the call site, not through an imported helper.
+ */
+export function today(timeZone: string, now: number = Date.now()): string {
+  return localDate(now, timeZone);
+}
+
 /** `YYYY-MM-DD` for an instant, as seen in `timeZone`. */
 export function localDate(at: number | Date, timeZone: string): string {
   // en-CA formats as YYYY-MM-DD, which is the shape the rest of the app uses.

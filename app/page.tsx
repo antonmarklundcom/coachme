@@ -1,15 +1,21 @@
 /**
- * The dashboard — a foundation-phase placeholder.
- *
- * Phase O1 builds state, not screens: this page exists to prove the gate, the
- * database and the scoring service all work end to end. The six real sections
- * of DESIGN.md §2 are phase S1's job, built on `getQueues()` and the rest of
- * lib/queries.ts rather than on SQL of their own.
+ * The dashboard (plan.md §6 S1) — DESIGN.md §2's six sections, reading only
+ * through lib/queries.ts / lib/score.ts / lib/momentum.ts. No SQL here.
  */
 
-import { PushToggle } from './components/PushToggle';
+import type { SessionState } from '@/lib/nudge/ladder';
+import { isDormant, ownerMinutes } from '@/lib/domain';
+import { safeTimeZone, today as ownerToday } from '@/lib/clock';
+import { momentum } from '@/lib/momentum';
 import { databaseUrl } from '@/lib/db';
-import { getQueues, getSettings, getOpenVerifyItems } from '@/lib/queries';
+import { getDecisions, getNudges, getOpenVerifyItems, getQueues, getSettings, getStack } from '@/lib/queries';
+import { PushToggle } from './components/PushToggle';
+import { MomentumStrip } from './components/MomentumStrip';
+import { OneThing, type OneThingData, type OneThingRepo } from './components/OneThing';
+import { LaunchQueue } from './components/LaunchQueue';
+import { QuickDecisions } from './components/QuickDecisions';
+import { AgentLane } from './components/AgentLane';
+import { ScopeReview } from './components/ScopeReview';
 
 export const dynamic = 'force-dynamic';
 
@@ -26,55 +32,95 @@ export default async function Home() {
     );
   }
 
-  const [{ queue, batches, lane }, settings, verify] = await Promise.all([
-    getQueues(),
-    getSettings(),
+  const settings = await getSettings();
+  const tz = safeTimeZone(settings.owner_timezone);
+  const today = ownerToday(tz);
+
+  const [{ repos, queue, lane, batches }, verify, decisions, nudges] = await Promise.all([
+    getQueues({ date: today }),
     getOpenVerifyItems(),
+    getDecisions('pending'),
+    getNudges(),
   ]);
+
+  const byName = new Map(repos.map((r) => [r.name, r]));
   const top = batches[0];
+  const todaysNudge = nudges.find((n) => n.local_date === today);
+  const session = (settings.session_state ?? {}) as SessionState;
+
+  async function repoDetails(names: string[], minutesOverride?: number): Promise<OneThingRepo[]> {
+    return Promise.all(
+      names
+        .map((name) => byName.get(name))
+        .filter((r): r is NonNullable<typeof r> => !!r)
+        .map(async (r) => ({
+          name: r.name,
+          pct: r.pct,
+          minutes: minutesOverride ?? ownerMinutes(r),
+          stack: await getStack(r.id),
+        }))
+    );
+  }
+
+  let oneThing: OneThingData = null;
+  if (todaysNudge?.type === 'question') {
+    oneThing = { kind: 'question', headline: todaysNudge.title ?? '', why: todaysNudge.body ?? '', repos: todaysNudge.repo_names };
+  } else if (todaysNudge?.type === 'shrunk') {
+    oneThing = {
+      kind: 'shrunk',
+      headline: todaysNudge.title ?? '',
+      why: todaysNudge.body ?? '',
+      minutes: 5,
+      batchKey: null,
+      repos: await repoDetails(todaysNudge.repo_names, 5),
+    };
+  } else if (top) {
+    const plural = top.repos.length === 1 ? '' : 'es';
+    oneThing = {
+      kind: 'batch',
+      headline: `${top.minutes} min unblocks ${top.repos.length} launch${plural}: ${top.repos.join(', ')}`,
+      why:
+        top.repos.length > 1
+          ? 'Same Hostinger account for all of them — one sitting, several launches.'
+          : 'Everything is prepped — this is the cheapest launch on the board.',
+      minutes: top.minutes,
+      batchKey: top.key,
+      repos: await repoDetails(top.repos),
+    };
+  }
+
+  const classify = repos.filter((r) => r.blocker === 'owner-setup-unclassified' && !isDormant(r, today));
+  const scopeDue = repos.filter((r) => r.scope_review_due && !r.kept_at && !isDormant(r, today));
+  const dormant = repos.filter((r) => isDormant(r, today));
+  const strip = momentum(repos, nudges, { date: today, baselineMinutes: settings.hpanel_baseline_minutes });
 
   return (
-    <main className="shell">
-      <h1>coachme</h1>
-      <p className="sub">
-        Foundation phase. {queue.length} owner-blocked repos at ≥70%, {lane.length} in the agent lane,
-        timezone {settings.owner_timezone}.
-      </p>
+    <main className="page">
+      <header className="masthead">
+        <h1>coachme</h1>
+        <p>One prepped session a day. Everything else on this page is context.</p>
+        <span className="stamp">timezone {tz} · today {today}</span>
+      </header>
 
-      {top && (
-        <section>
-          <h2>Today&apos;s one thing</h2>
-          <p className="headline">
-            {top.minutes} min unblocks {top.repos.length} launch{top.repos.length === 1 ? '' : 'es'}:{' '}
-            {top.repos.join(', ')}
-          </p>
-        </section>
-      )}
+      <MomentumStrip momentum={strip} />
 
-      <section>
-        <h2>Launch queue</h2>
-        <ol>
-          {queue.slice(0, 10).map((entry) => (
-            <li key={entry.repo.name}>
-              <strong>{entry.repo.name}</strong> · {entry.repo.pct}% · {entry.repo.blocker} ·{' '}
-              {entry.minutes} min · score {entry.total.toFixed(1)}
-            </li>
-          ))}
-        </ol>
-      </section>
+      <OneThing data={oneThing} session={session} />
+
+      <LaunchQueue queue={queue} />
+
+      <QuickDecisions decisions={decisions} verify={verify} classify={classify} />
+
+      <AgentLane lane={lane} />
+
+      <ScopeReview due={scopeDue} dormant={dormant} />
 
       <PushToggle />
 
-      {verify.length > 0 && (
-        <section>
-          <h2>Verify</h2>
-          <ul>
-            {verify.map((item) => (
-              <li key={item.id}>{item.verify_reason}</li>
-            ))}
-          </ul>
-        </section>
-      )}
+      <footer>
+        <span>Every tick here writes straight to the database — this page is a live view of it, not a copy.</span>
+        <span>No credentials on this page, ever. Runbooks use placeholders — real values stay in your password manager.</span>
+        <span>{strip.owner_minutes_total} owner-minutes of blockers across the whole portfolio.</span>
+      </footer>
     </main>
   );
 }
