@@ -1,13 +1,17 @@
 import type { Stack } from '@/lib/queries';
 import type { SessionState } from '@/lib/nudge/ladder';
 import { AutoSubmitForm } from './AutoSubmitForm';
+import { ChatPanel } from './ChatPanel';
 import { updateSessionState } from '../actions';
 
 export interface OneThingRepo {
+  id: number;
   name: string;
   pct: number;
   minutes: number;
   stack: Stack | null;
+  /** Pre-rendered by page.tsx (lib/runbook.ts + lib/markdown.ts) — this component only displays it. */
+  runbookHtml: string | null;
 }
 
 export type OneThingData =
@@ -22,26 +26,20 @@ export type OneThingData =
   | { kind: 'question'; headline: string; why: string; repos: string[] }
   | null;
 
-/** The runbook generator is S2's job (plan.md §6 S1) — this is a stub from what O1's scan already stored. */
-function RunbookStub({ stack }: { stack: Stack | null }) {
-  if (!stack) {
+/**
+ * The real runbook (plan.md §6 S2), ported from `src/runbook.js` +
+ * `templates/runbook-*.md` (lib/runbook.ts, lib/markdown.ts) and rendered
+ * server-side in page.tsx — this component only displays the result. A repo
+ * with no `stacks` row yet, or a render that failed and degraded to `null`
+ * (plan.md §4.5), falls back to the same message.
+ */
+function Runbook({ stack, html }: { stack: Stack | null; html: string | null }) {
+  if (!stack || !html) {
     return <p>No stack metadata yet — the next deep scan picks this repo up, or run one manually.</p>;
   }
-  return (
-    <div className="runbook">
-      <h4>What&apos;s known so far</h4>
-      <ul>
-        {stack.package_name && <li>package: <code>{stack.package_name}</code></li>}
-        {stack.engine && <li>engine: <code>{stack.engine}</code>{stack.dialect ? ` (${stack.dialect})` : ''}</li>}
-        {stack.package_manager && <li>package manager: <code>{stack.package_manager}</code></li>}
-        <li>migrations: {stack.migrations}</li>
-        {stack.env_session.length > 0 && (
-          <li>env vars to set: {stack.env_session.join(', ')}</li>
-        )}
-      </ul>
-      <p>The step-by-step runbook (exact commands, verify step) lands in phase S2 — this is O1&apos;s stored stack data only.</p>
-    </div>
-  );
+  // Safe: `html` is this app's own generated runbook markdown, run through
+  // lib/markdown.ts (which escapes everything first) — never user input.
+  return <div className="runbook" dangerouslySetInnerHTML={{ __html: html }} />;
 }
 
 export function OneThing({ data, session }: { data: OneThingData; session: SessionState }) {
@@ -101,7 +99,8 @@ export function OneThing({ data, session }: { data: OneThingData; session: Sessi
               <span className="repo-name">{repo.name}</span>
               <span className="pct">{repo.pct}% · {repo.minutes} min</span>
             </summary>
-            <RunbookStub stack={repo.stack} />
+            <Runbook stack={repo.stack} html={repo.runbookHtml} />
+            <ChatPanel repoId={repo.id} repoName={repo.name} />
           </details>
         ))}
       </div>

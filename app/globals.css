@@ -13,7 +13,10 @@
   --sunk: #e8edf2;
   --ink: #121a22;
   --ink-2: #55616e;
-  --ink-3: #7c8794;
+  /* #606b78, not the lighter #7c8794 tried first: that shade only cleared
+     3.1–3.65:1 against this page's various backgrounds — short of WCAG AA's
+     4.5:1 for the small labels (.stamp, .stat span, ...) it is used on. */
+  --ink-3: #606b78;
   --line: #d8e0e8;
   --accent: #a8410b;
   --accent-ink: #ffffff;
@@ -32,7 +35,7 @@
     --sunk: #101822;
     --ink: #e6ecf3;
     --ink-2: #94a2b2;
-    --ink-3: #6f7d8c;
+    --ink-3: #7c8996; /* same AA fix as the light value, against this theme's darker surfaces */
     --line: #232f3c;
     --accent: #f09a4e;
     --accent-ink: #1a1005;
@@ -161,11 +164,39 @@ details.repo > summary::after { content: '▸'; margin-left: auto; color: var(--
 details.repo[open] > summary::after { content: '▾'; }
 .repo-name { font-family: var(--font-jetbrains-mono), monospace; font-size: 0.9rem; font-weight: 500; }
 .pct { font-family: var(--font-jetbrains-mono), monospace; font-size: 0.78rem; color: var(--ink-2); font-variant-numeric: tabular-nums; }
-.runbook { padding: 0 0.8rem 1rem; border-top: 1px solid var(--line); font-size: 0.88rem; color: var(--ink-2); }
-.runbook h4 { font-size: 0.82rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--ink); margin: 1rem 0 0.4rem; }
+.runbook { padding: 0 0.8rem 1rem; border-top: 1px solid var(--line); font-size: 0.88rem; color: var(--ink-2); overflow-x: auto; }
+.runbook h3, .runbook h4 { font-size: 0.82rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--ink); margin: 1.1rem 0 0.4rem; }
 .runbook p { margin: 0.5rem 0; }
-.runbook ul { margin: 0.4rem 0; padding-left: 1.2rem; }
+.runbook ol, .runbook ul { margin: 0.4rem 0; padding-left: 1.2rem; }
 .runbook li { margin: 0.25rem 0; }
+.runbook code { font-family: var(--font-jetbrains-mono), monospace; font-size: 0.84em; background: var(--sunk); padding: 0.1em 0.3em; }
+.runbook pre {
+  background: var(--sunk); border: 1px solid var(--line); padding: 0.65rem 0.7rem;
+  overflow-x: auto; font-size: 0.8rem; line-height: 1.5;
+}
+.runbook pre code { background: none; padding: 0; }
+.runbook blockquote {
+  margin: 0.6rem 0; padding: 0.1rem 0 0.1rem 0.8rem;
+  border-left: 2px solid var(--accent); color: var(--ink-2);
+}
+.runbook table { border-collapse: collapse; font-size: 0.82rem; min-width: 100%; }
+.runbook th, .runbook td { border: 1px solid var(--line); padding: 0.35rem 0.5rem; text-align: left; vertical-align: top; }
+
+details.chat { background: var(--surface); border: 1px solid var(--line); border-top: 0; }
+details.chat > summary {
+  list-style: none; cursor: pointer; padding: 0.55rem 0.7rem; font-size: 0.85rem; color: var(--ink-2);
+  display: flex; align-items: center; gap: 0.55rem; min-height: 44px;
+}
+details.chat > summary::-webkit-details-marker { display: none; }
+details.chat > summary::after { content: '▸'; margin-left: auto; color: var(--ink-3); }
+details.chat[open] > summary::after { content: '▾'; }
+.chat-body { padding: 0 0.7rem 0.8rem; display: flex; flex-direction: column; gap: 0.6rem; }
+.chat-exchange { display: flex; flex-direction: column; gap: 0.3rem; }
+.chat-q { margin: 0; font-weight: 600; font-size: 0.88rem; }
+.chat-a { margin: 0; font-size: 0.9rem; color: var(--ink-2); background: var(--sunk); padding: 0.55rem 0.6rem; border-left: 2px solid var(--cool); white-space: pre-wrap; }
+.chat-form { display: flex; gap: 0.5rem; flex-wrap: wrap; }
+.chat-form input.text { flex: 1 1 12rem; }
+.chat-form button { flex: none; }
 
 /* ------------------------------------------------------------------ queue */
 

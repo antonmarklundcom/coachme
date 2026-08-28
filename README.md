@@ -58,6 +58,8 @@ curl -X POST -H "Authorization: Bearer $CRON_SECRET" \
 
 | File | What it is |
 |---|---|
+| `plan.md` | The current (Vercel + Neon) build plan, phase-by-phase, with the build log of what each phase actually did |
+| `DEPLOY.md` | Step-by-step to actually deploy this to Vercel + Neon — no build session has ever had the credentials to do this itself, so it has to be you |
 | `DESIGN.md` | Diagnosis of the pattern + the full coaching logic: live-doc structure, nudge triggers and cadence, anti-annoyance rules, what each Routine run computes |
 | `SCAN.md` | The twice-weekly repo scan: its prompt, why it is incremental, and what a scan may and may not change |
 | `ROUTINE.md` | The daily Routine: its exact prompt, schedule, and why each step exists |

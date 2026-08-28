@@ -659,6 +659,94 @@ budget there is better spent on the runbook + chat panel + deploy polish.
 `app/components/QuickDecisions.tsx`'s pattern (one `AutoSubmitForm` per card)
 is the one to copy for the chat panel's per-repo Q&A.
 
+### S2 — Runbooks, scope review, chat UI, deploy polish (2026-08-28) — branch `phase/s2-runbooks-and-polish`
+
+**Now exists:** the real runbook generator (`lib/runbook.ts`, a faithful port of
+`src/runbook.js`'s render half onto a `stacks` row instead of a local clone, plus
+`lib/render.ts` and `lib/markdown.ts` porting `template.js`/`markdown.js`),
+replacing S1's `RunbookStub` in `OneThing.tsx`; the chat panel UI
+(`app/components/ChatPanel.tsx`) wired to O2's `/api/chat`, in Today's One
+Thing and on every Launch Queue row; a real Lighthouse mobile run against a
+production build (`performance 0.95, accessibility 1.00, best-practices
+1.00`), with two real findings fixed (`--ink-3` contrast, missing
+`/robots.txt`); `DEPLOY.md`, the step-by-step Anton needs because no phase has
+ever had Vercel credentials. 24 new runbook tests + 2 robots.txt tests (170
+vitest + 130 legacy, all green).
+
+**Decisions taken:**
+- **Scope review needed nothing new.** S1 already built it fully (its own build
+  log says so) and this phase's plan.md §6 S2 mention was redundant, as S1
+  predicted. Verified rather than assumed: grepped `app/actions.ts`,
+  `lib/queries.ts`, `ScopeReview.tsx` for any GitHub call — none — and drove a
+  live kill through the UI against local Postgres, confirming `killed_at` sets
+  and the repo drops out of the due list on reload.
+- **The runbook is pre-rendered server-side in `page.tsx`, not inside
+  `OneThing.tsx`.** `renderRunbook` + `markdownToHtml` need `fs` (templates
+  live in `templates/*.md`) and can throw (`assertNoSecrets`); doing that in the
+  same `repoDetails()` loop that already awaits `getStack()` keeps `OneThing.tsx`
+  a pure display component and lets a render failure degrade to the existing
+  "no stack metadata" message (plan.md §4.5) instead of crashing the page.
+- **`next.config.ts` gained `outputFileTracingIncludes` for `templates/*.md`.**
+  `lib/runbook.ts` picks the template file by a runtime value
+  (`templateFor(stack.dialect)`), which Next's tracer can't always resolve
+  statically. Confirmed both ways: the templates do show up in the real build's
+  `.next/server/app/page.js.nft.json` even without the config (Next's tracer is
+  more conservative about `readFileSync(join(..., variable))` than expected),
+  but the explicit include makes it a guarantee instead of an implementation
+  detail to hope survives a Next upgrade.
+- **The chat panel lives on two sections, not one.** Today's One Thing (where
+  the runbook already is) and the Launch Queue (where "why is this blocked"
+  gets asked about repos not in today's prepped batch) share the same
+  `ChatPanel` component — plan.md's "not a general chatbot" stays true (still
+  one repo, one question, one grounded answer), this is placement, not scope.
+- **`/robots.txt` was added to `proxy.ts`'s `OPEN_PATHS`.** A private single-user
+  tool should say "Disallow: /", but it can't if the path itself 302s to
+  `/login` first — same category as the existing `/manifest.json`/`/sw.js`
+  exemptions (a static asset a client fetches before auth is possible), not a
+  change to the auth mechanism the hard limit (§4.7) protects.
+
+**Exit criteria, and how each was actually checked:** against a fresh local
+Postgres 16 cluster this session provisioned itself (`sudo service postgresql
+start`, still no Neon `DATABASE_URL` — see the deviation below), driven by the
+pre-installed Chromium via a temporary local Playwright install (`npm install
+--no-save playwright`, not committed):
+- *A runbook for a real DB-blocked repo matches the quality bar of the
+  existing `runbooks/*.md`*: not just matched the bar, matched the **bytes** —
+  every one of the 12 repos in `data/stacks.json` (besikt included) renders
+  identically to its committed `runbooks/<name>.md` (`tests/runbook.test.ts`).
+  Screenshotted besikt's rendered runbook in the actual dashboard, light and
+  dark, at 390px: full heading hierarchy, the fenced command blocks, the traps
+  blockquote, the "if it goes wrong" table — the CSS `templates/dashboard.html`
+  always specified but S1's stub never needed (`.runbook h3/pre/code/
+  blockquote/table` added to `globals.css`).
+- *Scope-review kill sets a flag only*: see "Decisions taken" above.
+- *The chat panel answers a real question against production data*: no
+  `ANTHROPIC_API_KEY` in this build session either (see deviations), so this
+  ran the one test available — against a real local-Postgres-backed `/api/chat`
+  with no key configured, the panel correctly displays the endpoint's own
+  documented 503 message rather than a raw error or a silent failure. The
+  read-only contract itself (`tests/chat.test.ts`) is unchanged by this phase.
+- *The app is live at its Vercel URL and reachable from a phone*: **not met,
+  and can't be from inside a Claude Code session** — see the deviation below
+  and `DEPLOY.md`.
+- `npm run build`, `npm run lint`, `npx tsc --noEmit` all clean; full suite
+  (170 vitest + 130 legacy) green; PR to merge green before this report.
+
+**Deviations / still open:**
+- **The app has never been deployed to Vercel, in any phase.** This session
+  checked directly rather than inferring it from another missing env var: PR
+  #16 (phase S1)'s check runs are exactly the three GitHub Actions jobs, no
+  Vercel deployment check, which is what a linked Vercel project posts on every
+  PR automatically. `DEPLOY.md` (new this phase) is the full checklist —
+  create the Vercel project, set six env vars, migrate/seed against the real
+  Neon database, confirm the two cron jobs actually appear in the Vercel
+  dashboard's Cron Jobs tab (also unverifiable without Vercel access), then the
+  phone install. This is squarely a plan.md §4.4 "missing credential with no
+  graceful fallback" — surfaced here explicitly, as the final phase, rather
+  than deferred again.
+- Same unresolved pair as every prior phase: no Neon `DATABASE_URL`, no
+  `ANTHROPIC_API_KEY`. `DEPLOY.md` §6/§7 are what closes both.
+
 ## 10. Backlog
 
 - Push-based real-time updates instead of Cron polling. If ever done: a GitHub App

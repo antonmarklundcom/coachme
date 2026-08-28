@@ -3,6 +3,71 @@
 Non-blocking things a later phase (or a later session) should know. Per
 `plan.md` §4.3, minor issues land here rather than stopping a build.
 
+## From phase S2 (2026-08-28)
+
+- **The app has never actually been deployed to Vercel.** Checked directly this
+  time, not just inferred from a missing env var: PR #16's (phase S1) check runs
+  are exactly the three GitHub Actions jobs (`node (20)`, `node (22)`, `build`) —
+  no Vercel deployment check at all, which is what a linked Vercel project posts
+  on every PR. No phase (O1, O2, S1, S2) has had Vercel or Neon credentials, so
+  this was never going to be caught earlier — but it means plan.md §6 S2's exit
+  criterion "the app is live at its Vercel URL and reachable from a phone" is not
+  met by this PR alone, and can't be: it needs Anton's Vercel account, which no
+  Claude Code session has access to. **`DEPLOY.md` (new this phase) is the exact
+  checklist** — create the Vercel project, set the six env vars, run the
+  migration against the real Neon database, confirm the two cron jobs actually
+  show up in the Vercel dashboard's Cron Jobs tab (also unverifiable from here),
+  then the phone install. This is the single biggest thing left before this tool
+  does its job.
+- **Lighthouse was available in this build session** (`npx lighthouse`, unlike
+  every prior phase) — run against a real `next start` production build, not
+  `next dev` (dev mode's unminified bundle badly understates performance; a
+  first pass against it scored 0.79/before-fixes on performance alone). Real
+  numbers, mobile, authenticated: **performance 0.95, accessibility 1.00,
+  best-practices 1.00**, closing the "no lighthouse binary" gap S1 left in
+  KNOWN-ISSUES. Two real findings came out of it and were fixed, not just
+  measured:
+  - `--ink-3` (the light-mode label/eyebrow color) only cleared 3.1–3.65:1
+    contrast against this page's backgrounds — short of WCAG AA's 4.5:1. Darkened
+    to `#606b78` (light) / `#7c8996` (dark, which had the same problem at
+    4.07–4.50:1). Accessibility went from 0.95/0.96 to a clean 1.00.
+  - `/robots.txt` didn't exist, so a crawler (and the SEO audit) got the
+    `/login` redirect instead — `proxy.ts`'s owner gate didn't exempt it, unlike
+    `/manifest.json` and `/sw.js`. Added `public/robots.txt` (`Disallow: /` —
+    this is a private single-user tool, it should say so) and opened the path.
+    This does drop the SEO category score (`is-crawlable` now correctly fails —
+    the page is deliberately blocked from indexing), which is the right
+    tradeoff for an app holding Anton's business situation, not a regression.
+- **The runbook generator is ported and wired in** (`lib/runbook.ts` +
+  `lib/render.ts` + `lib/markdown.ts`, replacing S1's `RunbookStub`), verified
+  the strongest way available: every repo in `data/stacks.json` renders
+  byte-identical to its existing `runbooks/*.md` file from the 2026-08 baseline
+  (`tests/runbook.test.ts`). `next.config.ts` gained `outputFileTracingIncludes`
+  for `templates/*.md` — without it the runbook works in `next dev` (repo
+  checkout on disk) but would silently 500 on Vercel, where only traced files
+  ship in the serverless bundle; confirmed present in the real build's
+  `.next/server/app/page.js.nft.json`.
+- **The chat panel UI is wired to `/api/chat`** (`app/components/ChatPanel.tsx`),
+  in the same per-repo `<details>` as the runbook (Today's One Thing) and also on
+  each Launch Queue row, since "why is X blocked" is asked from there just as
+  often. Tested against a real (local Postgres) database end to end: the panel
+  correctly surfaces the endpoint's documented 503 ("needs ANTHROPIC_API_KEY")
+  since no key exists in this build session either — the same unexercised gap
+  O2 recorded for the model round-trip itself, now also unexercised one layer up
+  at the UI. Whoever sets `ANTHROPIC_API_KEY` first should ask a real question
+  through the UI, not just `curl` the endpoint.
+- **Scope review needed no new code.** S1's build log already said its "Scope
+  review UI" item was done in S1, and plan.md §6 S2's own item was redundant —
+  confirmed this phase by reading the diff: `applyScopeAnswer` / `applyScope` /
+  `ScopeReview.tsx` contain no GitHub call of any kind (grepped for it), and a
+  live kill through the UI (local Postgres, `yt` forced into scope-review-due for
+  the test) set `killed_at` and dropped the repo out of the due list on reload,
+  exactly as designed.
+- **Still local Postgres, still no Neon `DATABASE_URL` in the build session** —
+  see the Vercel item above; this is the same root cause. `npm run migrate &&
+  npm run seed` against local Postgres 16 (fresh cluster, this session) matched
+  O1's original counts (53 repos, 12 stacks, 6 decisions).
+
 ## From phase S1 (2026-08-28)
 
 - **The runbook shown in Today's One Thing is a stub, as planned.** It renders
