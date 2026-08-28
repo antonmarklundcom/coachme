@@ -3,6 +3,43 @@
 Non-blocking things a later phase (or a later session) should know. Per
 `plan.md` §4.3, minor issues land here rather than stopping a build.
 
+## From phase S1 (2026-08-28)
+
+- **The runbook shown in Today's One Thing is a stub, as planned.** It renders
+  O1's stored `stacks` row (package name, engine, migrations count, the names
+  of env vars to set) rather than the full copy-paste runbook — the generator
+  (`src/runbook.js` + `templates/runbook-*.md`) is phase S2's job (plan.md §6
+  S1 says exactly this is allowed). A repo with no `stacks` row yet just says
+  so and points at the next scan.
+- **The old template's manual "Not today — shrink it" checkbox is dropped, on
+  purpose.** `DESIGN.md §2.1` describes an owner-initiated escape hatch, but
+  `settings.session_state.shrink` is not that any more: O2's ladder
+  (`lib/nudge/ladder.ts`) now owns that field itself — it sets it on the
+  automated day-3 shrink escalation, and the comment on `SessionState.shrink`
+  says the dashboard only *renders* the smaller ask. Wiring a checkbox to it
+  would let the owner flip a flag the ladder's own history-based state machine
+  (`chainLength`, `shrunkIgnored`, `isMuted`) does not expect to move on its
+  own, corrupting the escalation the hard limit (plan.md §4.7) forbids
+  redesigning. Instead, Today's One Thing reads whatever the ladder actually
+  decided today (`nudges` for today's `local_date`) and renders the shrunk or
+  question form read-only when that is what O2 chose. If a manual override is
+  wanted later, it needs its own field and its own decision, not this one —
+  see Backlog.
+- **Still local Postgres, still no Neon `DATABASE_URL` or `ANTHROPIC_API_KEY`
+  in the build session** — unchanged from O1/O2, and nothing in S1 needed
+  either: the dashboard was exercised end to end (all six sections, a launch-
+  queue clear, a quick-decision accept, and the shrunk/question One Thing
+  states) against the same local Postgres 16 O1 seeded. **Whoever gets the
+  Neon URL first should still be the one to run `npm run migrate && npm run
+  seed` there.**
+- **No `lighthouse` binary in this build session**, so the exit criterion's
+  "Lighthouse mobile score reasonable" was checked structurally instead of
+  numerically: the page ships no images (nothing to cause CLS or a large
+  unoptimized asset), fonts are self-hosted via `next/font/google` (no
+  render-blocking external font request, `font-display: swap` by default),
+  and the real pre-installed Chromium at a 390×844 mobile viewport showed no
+  layout shift or overflow across all six sections in both themes.
+
 ## From phase O1 (2026-08-28)
 
 - **The migration ran against local Postgres 16, not Neon.** No `DATABASE_URL`

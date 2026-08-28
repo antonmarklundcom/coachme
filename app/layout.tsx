@@ -1,5 +1,15 @@
 import type { Metadata, Viewport } from 'next';
+import { Archivo, JetBrains_Mono, Source_Sans_3 } from 'next/font/google';
 import './globals.css';
+
+const archivo = Archivo({ subsets: ['latin'], weight: ['500', '600', '700'], variable: '--font-archivo' });
+const sourceSans = Source_Sans_3({
+  subsets: ['latin'],
+  weight: ['400', '600'],
+  style: ['normal', 'italic'],
+  variable: '--font-source-sans',
+});
+const jetBrainsMono = JetBrains_Mono({ subsets: ['latin'], weight: ['400', '500'], variable: '--font-jetbrains-mono' });
 
 export const metadata: Metadata = {
   title: 'coachme',
@@ -23,14 +33,14 @@ export const viewport: Viewport = {
   width: 'device-width',
   initialScale: 1,
   themeColor: [
-    { media: '(prefers-color-scheme: light)', color: '#fbfaf8' },
-    { media: '(prefers-color-scheme: dark)', color: '#14161a' },
+    { media: '(prefers-color-scheme: light)', color: '#f3f6f8' },
+    { media: '(prefers-color-scheme: dark)', color: '#0d1117' },
   ],
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en">
+    <html lang="en" className={`${archivo.variable} ${sourceSans.variable} ${jetBrainsMono.variable}`}>
       <body>{children}</body>
     </html>
   );

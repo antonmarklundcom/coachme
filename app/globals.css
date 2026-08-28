@@ -1,29 +1,46 @@
 /*
- * Foundation-phase styling: enough for the login gate and the placeholder
- * dashboard to be legible on a phone in either theme. Phase S1 owns the real
- * design system — do not build on this beyond that.
+ * globals.css — the real design system (plan.md §6 S1).
+ *
+ * Ports the visual intent of templates/dashboard.html (DESIGN.md §2's six
+ * sections were designed against that page) onto React class names, mobile
+ * first, theme-aware. The auth-gate rules at the bottom predate this phase
+ * (O1) and are kept as-is — /login is unchanged.
  */
 
 :root {
-  --bg: #fbfaf8;
+  --ground: #f3f6f8;
   --surface: #ffffff;
-  --ink: #191b1f;
-  --muted: #5d626b;
-  --line: #e3e1dc;
-  --accent: #1f6f4a;
-  --warn: #8a3d2b;
+  --sunk: #e8edf2;
+  --ink: #121a22;
+  --ink-2: #55616e;
+  --ink-3: #7c8794;
+  --line: #d8e0e8;
+  --accent: #a8410b;
+  --accent-ink: #ffffff;
+  --accent-soft: #fcefe5;
+  --good: #146a47;
+  --good-soft: #e3f2ea;
+  --cool: #3a5a83;
+  --shadow: 0 1px 2px rgba(18, 26, 34, 0.06), 0 8px 24px -16px rgba(18, 26, 34, 0.3);
   color-scheme: light dark;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --bg: #14161a;
-    --surface: #1b1e23;
-    --ink: #eceef1;
-    --muted: #a2a8b3;
-    --line: #2b2f36;
-    --accent: #6dd39b;
-    --warn: #f0a58c;
+    --ground: #0d1117;
+    --surface: #151c25;
+    --sunk: #101822;
+    --ink: #e6ecf3;
+    --ink-2: #94a2b2;
+    --ink-3: #6f7d8c;
+    --line: #232f3c;
+    --accent: #f09a4e;
+    --accent-ink: #1a1005;
+    --accent-soft: #2a1c11;
+    --good: #55c493;
+    --good-soft: #12291f;
+    --cool: #86a8d4;
+    --shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 8px 24px -16px rgba(0, 0, 0, 0.8);
   }
 }
 
@@ -31,27 +48,198 @@
 
 body {
   margin: 0;
-  background: var(--bg);
+  background: var(--ground);
   color: var(--ink);
-  font: 16px/1.55 ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  font: 400 16px/1.55 var(--font-source-sans), ui-sans-serif, system-ui, -apple-system, sans-serif;
+  -webkit-text-size-adjust: 100%;
+  accent-color: var(--accent);
 }
+
+h1, h2, h3, h4 { font-family: var(--font-archivo), ui-sans-serif, system-ui, sans-serif; text-wrap: balance; margin: 0; }
+a { color: var(--accent); }
+code {
+  font-family: var(--font-jetbrains-mono), ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.86em;
+  background: var(--sunk);
+  padding: 0.1em 0.3em;
+}
+
+input:focus-visible, button:focus-visible, summary:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+button {
+  font: 600 0.95rem/1 var(--font-source-sans), sans-serif;
+  color: var(--accent-ink);
+  background: var(--accent);
+  border: 0;
+  padding: 0.65rem 1rem;
+  min-height: 44px;
+  cursor: pointer;
+}
+
+/* -------------------------------------------------------------- page shell */
+
+.page {
+  max-width: 44rem;
+  margin: 0 auto;
+  padding: 1.25rem 1rem 4rem;
+  display: flex;
+  flex-direction: column;
+  gap: 2.25rem;
+}
+
+.masthead { display: flex; flex-direction: column; gap: 0.35rem; }
+.masthead h1 { font-size: 1.5rem; font-weight: 700; letter-spacing: -0.01em; }
+.masthead p { margin: 0; color: var(--ink-2); font-size: 0.95rem; }
+.stamp { font-family: var(--font-jetbrains-mono), ui-monospace, monospace; font-size: 0.72rem; color: var(--ink-3); letter-spacing: 0.02em; }
+
+/* ---------------------------------------------------------------- section */
+
+section { display: flex; flex-direction: column; gap: 0.9rem; }
+.eyebrow {
+  display: flex; align-items: baseline; gap: 0.6rem;
+  font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.1em;
+  color: var(--ink-3); border-bottom: 1px solid var(--line); padding-bottom: 0.4rem;
+}
+.eyebrow b { font-family: var(--font-archivo), sans-serif; font-weight: 600; color: var(--ink-2); letter-spacing: 0.1em; }
+.eyebrow em { font-style: normal; margin-left: auto; font-family: var(--font-jetbrains-mono), monospace; letter-spacing: 0; }
+.note { margin: 0; color: var(--ink-2); font-size: 0.9rem; }
+.warn { color: var(--accent); }
+
+/* --------------------------------------------------------------- momentum */
+
+.momentum { display: flex; flex-direction: column; gap: 0.6rem; }
+.stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1px; background: var(--line); border: 1px solid var(--line); }
+.stat { background: var(--surface); padding: 0.6rem 0.7rem; display: flex; flex-direction: column; gap: 0.1rem; }
+.stat b { font-family: var(--font-archivo), sans-serif; font-size: 1.35rem; font-weight: 600; font-variant-numeric: tabular-nums; line-height: 1.1; }
+.stat span { font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.07em; color: var(--ink-3); }
+.burn { display: flex; flex-direction: column; gap: 0.3rem; }
+.burn .row { display: flex; justify-content: space-between; align-items: baseline; gap: 1rem; }
+.burn .label { font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.07em; color: var(--ink-3); }
+.burn .value { font-family: var(--font-jetbrains-mono), monospace; font-size: 0.85rem; font-variant-numeric: tabular-nums; }
+.meter { height: 8px; background: var(--sunk); border: 1px solid var(--line); overflow: hidden; }
+.meter > i { display: block; height: 100%; background: var(--good); }
+
+/* -------------------------------------------------------------- one thing */
+
+.onething {
+  background: var(--accent-soft);
+  border: 1px solid var(--line);
+  border-top: 3px solid var(--accent);
+  padding: 1.1rem 1rem 1.2rem;
+  display: flex; flex-direction: column; gap: 0.85rem;
+  box-shadow: var(--shadow);
+}
+.onething.quiet { border-top-color: var(--ink-3); background: var(--surface); }
+.onething h2 { font-size: 1.22rem; font-weight: 700; line-height: 1.3; }
+.onething .why { margin: 0; font-size: 0.93rem; color: var(--ink-2); max-width: 40ch; }
+
+.acts { display: flex; flex-direction: column; gap: 0.55rem; }
+label.act {
+  display: flex; align-items: center; gap: 0.6rem;
+  background: var(--surface); border: 1px solid var(--line);
+  padding: 0.6rem 0.7rem; cursor: pointer; font-weight: 600; font-size: 0.95rem;
+  min-height: 44px;
+}
+label.act.quiet { font-weight: 400; color: var(--ink-2); }
+label.act input[type='checkbox'] { width: 20px; height: 20px; margin: 0; flex: none; }
+label.act .when {
+  margin-left: auto; font: 400 0.88rem/1 var(--font-jetbrains-mono), monospace;
+  background: var(--sunk); border: 1px solid var(--line); color: var(--ink);
+  padding: 0.45rem 0.5rem; width: 9.5rem; max-width: 45%;
+}
+
+details.repo { background: var(--surface); border: 1px solid var(--line); }
+details.repo > summary {
+  list-style: none; cursor: pointer; padding: 0.65rem 0.7rem;
+  display: flex; align-items: center; gap: 0.55rem; min-height: 44px;
+}
+details.repo > summary::-webkit-details-marker { display: none; }
+details.repo > summary::after { content: '▸'; margin-left: auto; color: var(--ink-3); }
+details.repo[open] > summary::after { content: '▾'; }
+.repo-name { font-family: var(--font-jetbrains-mono), monospace; font-size: 0.9rem; font-weight: 500; }
+.pct { font-family: var(--font-jetbrains-mono), monospace; font-size: 0.78rem; color: var(--ink-2); font-variant-numeric: tabular-nums; }
+.runbook { padding: 0 0.8rem 1rem; border-top: 1px solid var(--line); font-size: 0.88rem; color: var(--ink-2); }
+.runbook h4 { font-size: 0.82rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--ink); margin: 1rem 0 0.4rem; }
+.runbook p { margin: 0.5rem 0; }
+.runbook ul { margin: 0.4rem 0; padding-left: 1.2rem; }
+.runbook li { margin: 0.25rem 0; }
+
+/* ------------------------------------------------------------------ queue */
+
+ul.rows { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 1px; background: var(--line); border: 1px solid var(--line); }
+ul.rows > li { background: var(--surface); }
+label.row {
+  display: flex; align-items: center; gap: 0.55rem; padding: 0.55rem 0.7rem;
+  cursor: pointer; min-height: 44px; flex-wrap: wrap;
+}
+label.row input[type='checkbox'], label.row input[type='radio'] { width: 20px; height: 20px; margin: 0; flex: none; }
+.row .meta { margin-left: auto; display: flex; align-items: center; gap: 0.5rem; }
+.tag {
+  font: 500 0.66rem/1.6 var(--font-jetbrains-mono), monospace; text-transform: uppercase; letter-spacing: 0.04em;
+  padding: 0 0.35rem; border: 1px solid var(--line); color: var(--ink-2); background: var(--sunk);
+}
+.tag.db { color: var(--accent); border-color: var(--accent); background: var(--accent-soft); }
+.tag.good { color: var(--good); border-color: var(--good); background: var(--good-soft); }
+.flag { flex-basis: 100%; font-size: 0.78rem; color: var(--accent); padding-left: 1.7rem; }
+.unblocks { flex-basis: 100%; font-size: 0.78rem; color: var(--ink-3); padding-left: 1.7rem; }
+
+/* -------------------------------------------------------------- decisions */
+
+.decision { background: var(--surface); border: 1px solid var(--line); padding: 0.8rem 0.8rem 0.85rem; display: flex; flex-direction: column; gap: 0.5rem; }
+.decision h3 { font-size: 0.98rem; font-weight: 600; }
+.decision .id { font-family: var(--font-jetbrains-mono), monospace; color: var(--accent); font-size: 0.8rem; margin-right: 0.4rem; }
+.decision .rec { margin: 0; font-size: 0.92rem; padding: 0.5rem 0.6rem; background: var(--sunk); border-left: 2px solid var(--good); }
+.decision .why { margin: 0; font-size: 0.84rem; color: var(--ink-3); }
+.decision .needed { font-family: var(--font-jetbrains-mono), monospace; font-size: 0.72rem; color: var(--ink-3); }
+.decision.drift { border-left: 3px solid var(--accent); }
+.decision.drift .rec { border-left-color: var(--accent); }
+
+input.text {
+  width: 100%; font: 400 0.9rem/1.4 var(--font-source-sans), sans-serif;
+  background: var(--ground); color: var(--ink); border: 1px solid var(--line); padding: 0.5rem 0.55rem;
+  min-height: 44px;
+}
+input.text::placeholder { color: var(--ink-3); }
+
+.classify-row { display: flex; flex-direction: column; gap: 0.35rem; padding: 0.6rem 0.7rem; }
+.classify-row .head { display: flex; align-items: baseline; gap: 0.5rem; }
+
+/* ------------------------------------------------------------- agent lane */
+
+.agent-note { color: var(--cool); }
+ul.readonly { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 1px; background: var(--line); border: 1px solid var(--line); }
+ul.readonly > li { background: var(--surface); display: flex; align-items: center; gap: 0.55rem; padding: 0.5rem 0.7rem; flex-wrap: wrap; }
+ul.readonly .meta { margin-left: auto; font-size: 0.78rem; color: var(--ink-3); display: flex; gap: 0.4rem; align-items: center; }
+
+/* ------------------------------------------------------------ scope review */
+
+.scope-head { display: flex; align-items: baseline; gap: 0.5rem; padding: 0.6rem 0.7rem 0.1rem; flex-wrap: wrap; }
+details.dormant > summary { cursor: pointer; font-size: 0.82rem; color: var(--ink-3); padding: 0.4rem 0; text-transform: uppercase; letter-spacing: 0.07em; }
+details.dormant > ul { margin-top: 0.5rem; }
+
+footer { color: var(--ink-3); font-size: 0.8rem; border-top: 1px solid var(--line); padding-top: 1rem; display: flex; flex-direction: column; gap: 0.4rem; }
+
+@media (min-width: 34rem) {
+  .page { padding: 2rem 1.5rem 5rem; }
+  .masthead h1 { font-size: 1.85rem; }
+  .onething h2 { font-size: 1.4rem; }
+}
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
+
+/* ------------------------------------------------------------------- auth */
+/* /login — unchanged since O1; not part of the S1 design system above. */
 
 .shell, .auth { max-width: 44rem; margin: 0 auto; padding: 2rem 1.25rem 4rem; }
 .auth { display: flex; min-height: 100dvh; align-items: center; }
 .auth form { width: 100%; }
+.auth h1 { font-size: 1.6rem; letter-spacing: -0.01em; margin: 0 0 0.25rem; }
+.sub { color: var(--ink-2); margin: 0 0 1.5rem; }
+.auth label { display: block; font-size: 0.85rem; color: var(--ink-2); margin-bottom: 0.35rem; }
 
-h1 { font-size: 1.6rem; letter-spacing: -0.01em; margin: 0 0 0.25rem; }
-h2 { font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); margin: 2rem 0 0.5rem; }
-.sub { color: var(--muted); margin: 0 0 1.5rem; }
-.headline { font-size: 1.15rem; font-weight: 600; }
-.warn { color: var(--warn); }
-
-ol, ul { padding-left: 1.2rem; margin: 0; }
-li { margin: 0.35rem 0; }
-
-label { display: block; font-size: 0.85rem; color: var(--muted); margin-bottom: 0.35rem; }
-
-input[type='password'] {
+.auth input[type='password'] {
   width: 100%;
   padding: 0.7rem 0.8rem;
   font-size: 1rem;
@@ -61,16 +249,4 @@ input[type='password'] {
   border-radius: 8px;
 }
 
-button {
-  margin-top: 1rem;
-  padding: 0.7rem 1.1rem;
-  font-size: 1rem;
-  font-weight: 600;
-  color: var(--bg);
-  background: var(--accent);
-  border: 0;
-  border-radius: 8px;
-  cursor: pointer;
-}
-
-code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.9em; }
+.auth button { margin-top: 1rem; border-radius: 8px; }

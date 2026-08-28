@@ -570,6 +570,95 @@ which is what tells the nudge engine the owner acted. Open `question` nudges
 "what is actually in the way on X?" card §3 asks for. `app/components/PushToggle.tsx`
 is the notifications card, ready to drop into the real dashboard.
 
+### S1 — Dashboard UI (2026-08-28) — branch `phase/s1-dashboard-ui`
+
+**Now exists:** the real dashboard at `/`, all six `DESIGN.md` §2 sections,
+reading only through `lib/queries.ts` / `lib/score.ts` / the new
+`lib/momentum.ts` (never raw SQL in a component). `lib/momentum.ts` is a
+faithful port of `scripts/legacy/src/scope.js`'s momentum/streak halves onto
+`Repo`/`NudgeRecord` rows — 10 new unit tests. `app/actions.ts` is every write
+the page makes (six server actions, each a thin call into `lib/queries.ts`)
+plus two small additions there: `resolveDecision` (quick-decisions accept/
+correct) and `applyScopeAnswer` (keep/snooze/kill, a port of the scope half of
+`scripts/legacy/src/scope.js`). `app/components/AutoSubmitForm.tsx` is the one
+client boundary every section wraps its controls in — a checkbox submits on
+change, a text field on blur, both straight to Neon via `revalidatePath('/')`,
+no save button, no client state. `app/globals.css` replaces the O1 placeholder
+styling with the real design system, porting `templates/dashboard.html`'s
+tokens and class names (light/dark via `prefers-color-scheme`, mobile-first,
+44px tap targets) onto React; fonts moved to `next/font/google`
+(Archivo/Source Sans 3/JetBrains Mono, self-hosted, no external font request).
+
+**Decisions taken:**
+- **Today's One Thing reflects what O2's ladder actually decided today, not
+  just a fresh recomputation of the top DB batch.** The card reads `nudges`
+  for today's `local_date`: a `question` row renders read-only (quiet styling,
+  no runbook — DESIGN.md §2.1's "surfaced on the dashboard"); a `shrunk` row
+  renders the smaller ask with its real 5-minute framing; anything else (or no
+  row yet — a silent day) falls back to `batches[0]`, the top DB-setup batch,
+  same as O1's placeholder. This is what makes the card honest about a batch
+  that shrank or muted rather than silently re-showing the full ask.
+- **The old template's manual "shrink it" checkbox was dropped, not ported.**
+  See `KNOWN-ISSUES.md` and Backlog §10 — `session_state.shrink` turned out to
+  be owned by O2's ladder itself, and reusing it from the UI would have meant
+  quietly redesigning the escalation state machine, which §4.7 forbids.
+- **Scope review (DESIGN.md §2.5) was built fully functional in S1, not left
+  for S2.** `plan.md` §6 S1's own exit criterion says "all six sections render
+  from real Neon data" and lists a live checkbox tick as the bar; §6 S2 also
+  lists "Scope review UI" from an earlier pass at this plan. Treating S1's
+  explicit six-section requirement as authoritative, keep/snooze/kill write
+  through the new `applyScopeAnswer` now. S2's mention is redundant — nothing
+  further to build there, only whatever polish it turns up.
+- **D6 (plan.md §7's "classify the blockers") got its own inbox section**,
+  inside Quick decisions: every `owner-setup-unclassified` repo with a text
+  field that sets `next_step` through `updateRepo` — no reclassification of
+  the blocker itself, which stays scan-service territory.
+- **Today's One Thing's runbook is the planned stub**: O1's `stacks` row
+  (package, engine, migrations, env var names), not the generated runbook —
+  `KNOWN-ISSUES.md` says so explicitly, matching the S1 prompt's own allowance.
+
+**Exit criteria, and how each was actually checked:** against the same local
+Postgres 16 O1/O2 seeded (still no Neon `DATABASE_URL` in the build session —
+unchanged gap, `KNOWN-ISSUES.md`), driven by the pre-installed Chromium at a
+390×844 mobile viewport, both themes:
+- *All six sections render from real Neon data*: screenshotted top to bottom
+  in light and dark: Momentum strip, Today's One Thing, Launch queue, Quick
+  decisions (+ D6), Agent lane, Scope review all present with real seeded
+  values (e.g. "45 min unblocks 3 launches: qr, facturar, ecom").
+- *A checkbox tick persists across a reload*: three separate flows, each
+  followed by a hard reload — Today's One Thing "Booked" stayed checked;
+  accepting a quick decision dropped it from 6 pending to 5 and it stayed
+  gone; ticking a launch-queue repo's blocker cleared moved it out of the
+  queue (`qr` gone, `facturar` now first) and stayed out — there is no
+  un-clear, by design (`clearBlocker` matches `SCAN.md`'s "a tick is a
+  fact").
+- *The shrunk/question One Thing states*: hand-inserted a `question` and then
+  a `shrunk` `nudges` row for today and reloaded for each — both rendered
+  correctly (quiet card, no runbook, for the question; "5 minutes…" headline
+  and a 5-minute repo tag, for the shrunk ask) with zero console/page errors,
+  then removed.
+- *No obvious mobile regressions*: no images anywhere on the page (nothing to
+  cause CLS), `next/font` avoids a render-blocking external font request, and
+  the Chromium screenshots at 390px show no overflow or broken layout in
+  either theme. No `lighthouse` binary was available in this build session to
+  get a number — `KNOWN-ISSUES.md` records the structural check that stood in
+  for it.
+- `npm run build`, `npm run lint`, and the full suite (120 vitest + 130
+  legacy, the 10 new momentum tests included) all green; `npx tsc --noEmit`
+  clean.
+
+**Deviations:** the same two as O1/O2, unchanged — no Neon `DATABASE_URL`, no
+`ANTHROPIC_API_KEY`. Both remain in `KNOWN-ISSUES.md`.
+
+**Where S2 should look first:** `app/components/OneThing.tsx`'s `RunbookStub`
+is exactly where the real runbook generator replaces the stub — same props
+(`Stack | null`), same collapsed `<details class="repo">` it already renders
+inside. `app/actions.ts` and `lib/queries.ts`'s `applyScopeAnswer` are already
+wired for scope review, so S2's own "Scope review UI" item is done; S2's
+budget there is better spent on the runbook + chat panel + deploy polish.
+`app/components/QuickDecisions.tsx`'s pattern (one `AutoSubmitForm` per card)
+is the one to copy for the chat panel's per-repo Q&A.
+
 ## 10. Backlog
 
 - Push-based real-time updates instead of Cron polling. If ever done: a GitHub App
@@ -585,3 +674,9 @@ is the notifications card, ready to drop into the real dashboard.
   owner discovering it by hand.
 - Automatic name/content mismatch detection (e.g. `flyttatillspanien` containing
   Paraguay real-estate code — also found manually on 2026-08-28).
+- A manual "not today, shrink it" override on Today's One Thing. S1 deliberately
+  did not wire the old template's escape-hatch checkbox to
+  `settings.session_state.shrink` because O2's ladder now owns that field for
+  its own day-3 auto-escalation (`KNOWN-ISSUES.md`, phase S1). A real manual
+  override would need its own field and its own decision about how it
+  interacts with the escalation chain — not a reuse of the automated one.
