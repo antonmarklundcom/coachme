@@ -1,12 +1,34 @@
 {
   "name": "coachme",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
-  "type": "module",
-  "description": "Portfolio focus coach — state of record, leverage scoring, live-doc dashboard, daily nudge Routine.",
+  "description": "Portfolio focus coach — state of record in Neon, leverage scoring, twice-weekly repo scan, dashboard on Vercel.",
   "scripts": {
-    "queue": "node src/score.js",
-    "test": "node --test test/*.test.js"
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "eslint",
+    "migrate": "tsx scripts/migrate.ts",
+    "seed": "tsx scripts/seed.ts",
+    "queue": "tsx scripts/queue.ts",
+    "test": "vitest run && node --test scripts/legacy/test/*.test.js"
   },
-  "engines": { "node": ">=20" }
+  "engines": { "node": ">=20" },
+  "dependencies": {
+    "next": "16.3.3",
+    "pg": "^8.13.1",
+    "react": "19.2.8",
+    "react-dom": "19.2.8"
+  },
+  "devDependencies": {
+    "@types/node": "^20",
+    "@types/pg": "^8.11.10",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "eslint": "^9",
+    "eslint-config-next": "16.3.3",
+    "tsx": "^4.19.2",
+    "typescript": "^5",
+    "vitest": "^2.1.8"
+  }
 }

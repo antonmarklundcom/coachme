@@ -1,8 +1,8 @@
 name: test
 
-# The coach's state of record is written by unattended Routine sessions, so the
-# only thing standing between a bad merge and a corrupted portfolio.json is this
-# suite. It runs on every push and every PR.
+# The coach's state of record is written by unattended cron runs, so the only
+# thing standing between a bad merge and a corrupted portfolio is this suite.
+# It runs on every push and every PR.
 on:
   push:
     branches: [main]
@@ -19,4 +19,21 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: ${{ matrix.node }}
+          cache: npm
+      - run: npm ci
+      # Unit tests for the new app (scoring invariant, drift guard, auth gate)
+      # plus the legacy Node scripts the algorithms were ported from.
       - run: npm test
+
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      # No env vars: the build must never need a credential (plan.md §4.5).
+      - run: npm run build
+      - run: npx eslint .
