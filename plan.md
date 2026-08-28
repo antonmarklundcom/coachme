@@ -437,6 +437,139 @@ it), `lib/domain.ts` (lanes, blockers, owner-minutes — the nudge ladder's
 vocabulary), `lib/scan/run.ts` for the shape a cron route takes here, and
 `proxy.ts`'s `OPEN_PATHS`, which already exempts `/api/nudge`.
 
+### O2 — Nudge engine, Web Push, PWA, chat (2026-08-28) — branch `phase/o2-push-and-nudge`
+
+**Now exists:** the daily coach. `lib/nudge/*` — `history.ts` (the caps),
+`ladder.ts` (the six rungs), `outcomes.ts`, `run.ts` (resolve → select →
+record → notify) — a port of `scripts/legacy/src/select.js` reading Neon;
+`lib/clock.ts`, the owner-timezone day every cap is counted in; `/api/nudge`
+behind `CRON_SECRET` plus the second and final Hobby cron (daily 08:00
+America/Asunción); `lib/push.ts` + `/api/push/subscribe` + `npm run vapid`;
+a real PWA (`public/manifest.json`, `public/sw.js`, generated icons via
+`npm run icons`) and the `PushToggle` card that subscribes a browser;
+`/api/chat`, read-only, on `claude-sonnet-5`; `lib/anthropic.ts`, now the one
+Messages-API call site for both the scan and the chat. 73 new unit tests (110
+vitest + 130 legacy, all green).
+
+**Decisions taken (the ones §5 O2 left open):**
+- **`nudges` gained four columns** (`migrations/0002_nudge_engine.sql`) and
+  `momentum` joined its type list. §2's sketch could not express the rules:
+  `local_date` because every cap is the OWNER's day and Asunción is UTC-3, so
+  a late push would otherwise count on the wrong day; `pushed` because the
+  `question` rung decides *without* pushing and "already decided today" must
+  stay a different count from "pushes this week"; `parent_type` and
+  `title`/`body` so the escalation chain and the question text survive in the
+  audit trail. The schema freeze in §4.7 binds the Sonnet phases; this is the
+  Opus phase that was meant to finish the foundation.
+- **Mute and shrunk-ignored state is derived from the history, not stored.** A
+  `question` row *is* the mute; consecutive ignored `shrunk` rows are the
+  ignore count. One copy cannot drift from the audit trail; two can.
+- **Outcome resolution replaces the harvest.** There is no live-doc to diff, so
+  "did the owner act?" is answered from the traces a deliberate owner action
+  leaves: `cleared_blockers` dates, `kept_at`/`killed_at`, answered
+  `decisions`, resolved `scan_events`. Never from a scan — SCAN.md's rule that
+  an estimate is not a fact applies here too.
+- **A pure silence is not recorded.** Only asks go in `nudges`. A "nothing
+  qualifies" row would break `chainLength` (it walks back until the repos stop
+  matching) and would make Sunday look like a decision.
+- **Chat rate limit: a fixed window in module memory**, 20 questions per 10
+  minutes per instance. One user behind an auth gate; the limit is there to
+  bound an accidental loop, not an attacker, and a shared counter would mean
+  another table and a round-trip per question.
+- **Raw `fetch`, not the Anthropic SDK.** O1 set that pattern and both call
+  sites want one plain request with a timeout; mixing an SDK call site and a
+  `fetch` one would be worse than either.
+
+**Exit criteria, and how each was actually checked:**
+- *Ladder*: `npm run nudge` against seeded data → `PUSH db-session` /
+  "45 min unblocks 3 launches: qr, facturar, ecom" — the DESIGN.md §1a
+  headline. An immediate second run → `silent — daily cap of 1 reached`.
+- *Caps*: 35 unit tests, one per hard rule in §3, including the ones only a
+  test can catch — a Sunday must not reset an escalation chain, an undelivered
+  decision must not count against the weekly push cap.
+- *Web Push*: the FCM hop is unreachable from this container, so both halves
+  were proven separately. Send: a real `web-push` call to a local HTTPS push
+  service stand-in — `aes128gcm`, 327 encrypted bytes, and the VAPID ES256
+  signature verified against `VAPID_PUBLIC_KEY` with node's crypto (right
+  `aud`, right `sub`, future `exp`); a 410 pruned the row. Receive: a real
+  Chromium registered the real `public/sw.js`, precached exactly the four
+  shell entries, and turned the exact payload into a real Notification —
+  correct title, body, icon and data; a second push with the same tag replaced
+  it rather than stacking; an empty payload still showed something. Then the
+  whole app path: subscription in Postgres → `POST /api/nudge` → `sent: 1`,
+  second run silent and sending nothing, 410 pruning the row, and the run
+  still deciding and recording with nothing subscribed.
+- *Installable*: Chrome's own parser (`Page.getAppManifest`) reported no
+  errors, and 14/14 install criteria pass — including that every declared icon
+  actually resolves as a PNG and the worker has both a `fetch` and a `push`
+  handler.
+- *Chat is read-only*: tested adversarially, and harder than a happy path
+  would have been. Pointed at a stand-in that claims to have written, emits
+  SQL, emits an unsolicited `tool_use` block and attempts a prompt-injection
+  override, then asked six questions including "mark besikt as done" and
+  "ignore all previous instructions". Every one of the seven tables was
+  md5-identical before and after; besikt stayed at 95%/db-setup. Structurally:
+  the path imports three SELECT-only functions, reaches no write function,
+  declares no tools, and never parses the reply — all pinned in
+  `tests/chat.test.ts`.
+
+**The pre-handoff audit caught eight things, all fixed before merge.** Worth
+recording because most were invisible to a green test suite:
+
+- **The inbox rung was silently dead.** `pg` parses `TIMESTAMPTZ` into a JS
+  `Date`, and `String(date).slice(0, 10)` is `"Fri Aug 28"` — which parses to
+  `NaN`, so `>= 7 days old` was always false. A single decision could have sat
+  in the inbox forever without the coach ever mentioning it, and nothing would
+  have errored. The tests passed because fixtures hand-fed ISO strings, which
+  production never does. Fixed at the query layer (`asIso`, `to_char`) plus
+  `localDateOf` in `lib/clock.ts`; the regression test now builds its date the
+  way the database does. **A lesson for later phases: a test that hand-writes a
+  date string is not testing the date handling.**
+- **A repo that reached the question stage was muted forever**, not for a week.
+  `shrunkIgnored` only reset on an `acted` outcome, so an unanswered question
+  left the count at the limit; when the mute expired the ladder emitted another
+  question and re-muted. The top rung would have gone permanently silent on that
+  batch. Both `shrunkIgnored` and `chainLength` now stop at a `question` row —
+  escalating to a question ends that line of asking, and the week's silence is
+  followed by a normal ask, which is the only reading of §3 that means anything.
+- **`--dry-run` cancelled the real nudge.** It recorded a row, so the 08:00 cron
+  found the day already decided and delivered nothing. A dry run now writes
+  nothing and sends nothing.
+- **Owner-action dates were UTC days compared against owner-local ones.** A tick
+  at 21:30 in Asunción stored as tomorrow could resolve the *next* morning's
+  nudge as "acted", clearing a chain, a cooldown and a shrink counter the owner
+  never touched. `getOwnerActions` now converts in SQL (`AT TIME ZONE`), and
+  `clearBlocker` stamps the owner's day by default.
+- **A muted repo was still named** whenever it shared a batch with an unmuted
+  sibling — the coach hounding the exact repo it had just stopped asking about.
+  The ask now drops muted repos and tells the truth about the shorter sitting
+  ("35 min unblocks 2 launches", not 45/3). This one matched the legacy code
+  exactly, so it is a fixed legacy defect rather than a regression.
+- **An unguarded `await` in `sendPush`'s catch** could reject the whole
+  `Promise.all` and 500 a run whose nudge row was already written — unretryable
+  for the rest of the day. Guarded.
+- **Scan-event dates reached the chat model as `"Mon Aug 10"`**, same root cause
+  as the first item. Formatted in SQL now.
+- **`/api/push/subscribe` and `/api/chat` failed open with no `OWNER_SECRET`.**
+  O1's "no secret means no gate, or the app locks shut" rule is about pages a
+  human can recover from; it does not extend to an endpoint that writes rows or
+  spends Anthropic tokens. Those two now return 503. Pages are unchanged.
+
+**Deviations / still open:** the same two as O1, unchanged — no Neon
+`DATABASE_URL` (0002 has only run against local Postgres 16) and no
+`ANTHROPIC_API_KEY` (the real Sonnet round-trip is still unexercised, on both
+the scan and the chat). Both are in `KNOWN-ISSUES.md` with what to re-run.
+
+**Where S1 should look first:** `lib/queries.ts` still — `getNudges`,
+`getOwnerActions` and `patchSessionState` are new there. The dashboard's
+"Today's One Thing" reads `settings.session_state` (`booked`/`when`/`done`/
+`done_date`/`shrink`), and the ☐ Booked and ☐ Done cards write it through
+`patchSessionState`; ticking a blocker clear goes through `clearBlocker`,
+which is what tells the nudge engine the owner acted. Open `question` nudges
+(type `question`, outcome `pending`) carry their text in `title` — that is the
+"what is actually in the way on X?" card §3 asks for. `app/components/PushToggle.tsx`
+is the notifications card, ready to drop into the real dashboard.
+
 ## 10. Backlog
 
 - Push-based real-time updates instead of Cron polling. If ever done: a GitHub App

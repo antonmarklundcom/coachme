@@ -7,6 +7,7 @@
  * lib/queries.ts rather than on SQL of their own.
  */
 
+import { PushToggle } from './components/PushToggle';
 import { databaseUrl } from '@/lib/db';
 import { getQueues, getSettings, getOpenVerifyItems } from '@/lib/queries';
 
@@ -61,6 +62,8 @@ export default async function Home() {
           ))}
         </ol>
       </section>
+
+      <PushToggle />
 
       {verify.length > 0 && (
         <section>

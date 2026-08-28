@@ -11,20 +11,27 @@
     "migrate": "tsx scripts/migrate.ts",
     "seed": "tsx scripts/seed.ts",
     "queue": "tsx scripts/queue.ts",
+    "vapid": "tsx scripts/vapid.ts",
+    "icons": "tsx scripts/icons.ts",
+    "nudge": "tsx scripts/nudge.ts",
     "test": "vitest run && node --test scripts/legacy/test/*.test.js"
   },
-  "engines": { "node": ">=20" },
+  "engines": {
+    "node": ">=20"
+  },
   "dependencies": {
     "next": "16.3.3",
     "pg": "^8.13.1",
     "react": "19.2.8",
-    "react-dom": "19.2.8"
+    "react-dom": "19.2.8",
+    "web-push": "^3.6.7"
   },
   "devDependencies": {
     "@types/node": "^20",
     "@types/pg": "^8.11.10",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "@types/web-push": "^3.6.4",
     "eslint": "^9",
     "eslint-config-next": "16.3.3",
     "tsx": "^4.19.2",
