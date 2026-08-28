@@ -11,14 +11,13 @@
  */
 
 import { BLOCKERS, LANES } from '../domain';
+import { AnthropicUnavailable, COACH_MODEL, anthropicKey, askClaude } from '../anthropic';
 import type { ScanFinding } from './apply';
 import type { CommitInfo, PullInfo } from './github';
 
-export const SCAN_MODEL = 'claude-sonnet-5';
-
-export function anthropicKey(): string | null {
-  return process.env.ANTHROPIC_API_KEY ?? null;
-}
+/** Re-exported so existing callers and tests keep their import site. */
+export const SCAN_MODEL = COACH_MODEL;
+export { anthropicKey };
 
 export interface ClassifyInput {
   name: string;
@@ -109,7 +108,9 @@ export function sanitizeFinding(raw: unknown): ScanFinding {
   return out;
 }
 
-export class ClassifierUnavailable extends Error {}
+/** Kept as its own class so `catch (e) { if (e instanceof ClassifierUnavailable) }`
+ *  in the scan orchestrator still reads as "the classifier specifically". */
+export class ClassifierUnavailable extends AnthropicUnavailable {}
 
 /**
  * Ask Sonnet what this repo looks like. Throws `ClassifierUnavailable` when no
@@ -117,27 +118,9 @@ export class ClassifierUnavailable extends Error {}
  * (live-URL check + stack metadata) rather than failing the run — plan.md §4.5.
  */
 export async function classifyRepo(input: ClassifyInput): Promise<ScanFinding> {
-  const key = anthropicKey();
-  if (!key) throw new ClassifierUnavailable('ANTHROPIC_API_KEY is not set');
+  if (!anthropicKey()) throw new ClassifierUnavailable('ANTHROPIC_API_KEY is not set');
 
-  const res = await fetch(`${process.env.ANTHROPIC_BASE_URL ?? 'https://api.anthropic.com'}/v1/messages`, {
-    method: 'POST',
-    headers: {
-      'content-type': 'application/json',
-      'x-api-key': key,
-      'anthropic-version': '2023-06-01',
-    },
-    body: JSON.stringify({
-      model: SCAN_MODEL,
-      max_tokens: 1024,
-      messages: [{ role: 'user', content: buildPrompt(input) }],
-    }),
-    signal: AbortSignal.timeout(45_000),
-  });
-
-  if (!res.ok) throw new Error(`Anthropic ${res.status}: ${(await res.text()).slice(0, 300)}`);
-  const body = (await res.json()) as { content: { type: string; text?: string }[] };
-  const text = body.content.filter((c) => c.type === 'text').map((c) => c.text ?? '').join('');
+  const text = await askClaude({ prompt: buildPrompt(input), maxTokens: 1024 });
   const json = text.slice(text.indexOf('{'), text.lastIndexOf('}') + 1);
   try {
     return sanitizeFinding(JSON.parse(json));

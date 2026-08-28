@@ -31,6 +31,40 @@ Non-blocking things a later phase (or a later session) should know. Per
 - **Nudge history migrated as 0 rows** because `data/nudges.json` has an empty
   history. Nothing lost — noted so a future audit does not read it as a bug.
 
+## From phase O2 (2026-08-28)
+
+- **Still no Neon `DATABASE_URL` in the build session.** O2 ran, like O1,
+  against a local Postgres 16: `migrations/0002_nudge_engine.sql` applied
+  cleanly there and the nudge engine was exercised end to end against the real
+  seeded data, but neither migration has yet run against Neon. Nothing in 0002
+  is local-only (four `ADD COLUMN`s, a `CHECK` swap and an index), so it should
+  be a re-run, not a port. **Whoever gets the Neon URL first should run
+  `npm run migrate && npm run seed` there and confirm the counts.**
+- **Still no `ANTHROPIC_API_KEY`, so `/api/chat` has never called the real
+  Sonnet.** Everything either side of that one hop is verified: the endpoint
+  loads the repo's real row and stack metadata, builds the grounded prompt,
+  sends `model: claude-sonnet-5`, and returns the reply as a string (see the
+  §9 build log for the transcript). Only the inference itself is unexercised —
+  the same gap O1 recorded for the scan classifier, and the same fix: set the
+  key and ask `/api/chat` one real question.
+- **Real Web Push could not traverse a real push service from this container.**
+  Chromium's `pushManager.subscribe()` needs an outbound connection to Google's
+  FCM servers, which the sandbox blocks, so it hangs. Both halves were proven
+  separately instead, and thoroughly (§9): the send half against a real push
+  service stand-in, with the VAPID ES256 signature verified against the public
+  key; the receive half in a real Chromium, delivering the payload to the real
+  `public/sw.js` over CDP. The untested link is the FCM hop, which is not this
+  app's code. **Anton's first real device subscription (the §7 human step after
+  S2) is still what confirms the whole chain.**
+- **`npm audit` reports 5 vulnerabilities, all in the vitest/vite dev
+  toolchain** (esbuild's dev-server advisory, inherited through `vitest@2`).
+  Nothing ships them — they are devDependencies of the test runner — so the
+  fix (a vitest 3 major bump) was left out of a phase that had no other reason
+  to touch the test runner. Worth doing in S2's polish pass.
+- **The nudge history is not pruned.** One row a day forever is a few hundred
+  rows a year, and every read walks the whole table backwards. Fine for years;
+  worth an index-backed window or a prune if it is ever not.
+
 ## Not from O1 — flagging before the first real scan run
 
 A broader manual audit (61 repos, 2026-08-28, outside this repo) is more current

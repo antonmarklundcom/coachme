@@ -17,7 +17,17 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { COOKIE_NAME, isValidCookieValue, ownerSecretConfigured } from '@/lib/auth';
 
-const OPEN_PATHS = ['/login', '/api/scan', '/api/nudge', '/manifest.json', '/sw.js'];
+const OPEN_PATHS = [
+  '/login',
+  '/api/scan',
+  '/api/nudge',
+  // The PWA shell. A browser fetches the manifest and its icons before the user
+  // has any chance to log in — redirecting those to /login makes the app
+  // uninstallable, and the files say nothing about the portfolio.
+  '/manifest.json',
+  '/sw.js',
+  '/icons',
+];
 
 export default async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;

@@ -9,11 +9,14 @@
 import { query, one } from './db';
 import {
   type Blocker,
+  type ClearedBlocker,
   type Lane,
   type Repo,
   isoDate,
   unblockedLane,
 } from './domain';
+import type { NudgeOutcome, NudgeRecord, NudgeType } from './nudge/history';
+import type { OwnerAction } from './nudge/outcomes';
 import { dbBatches, launchQueue, agentLane, rank, type DbBatch, type ScoredRepo } from './score';
 
 const REPO_COLUMNS = `
@@ -134,6 +137,10 @@ export interface Decision {
   status: 'pending' | 'accepted' | 'corrected';
   answer: string | null;
   batch: string | null;
+  /** Both already selected by `SELECT *`; the inbox rung reads created_at to
+   *  decide whether one item is old enough to nudge on its own. */
+  created_at: string;
+  resolved_at: string | null;
 }
 
 export async function getDecisions(status?: Decision['status']): Promise<Decision[]> {
@@ -260,4 +267,183 @@ export async function getQueues(opts: { date?: string; now?: number } = {}): Pro
     lane: agentLane(repos, opts),
     batches: dbBatches(repos, opts),
   };
+}
+
+/* -------------------------------------------------------------------- nudges */
+
+/**
+ * The nudge history, oldest first — the order lib/nudge/history.ts walks
+ * backwards from. Ordered by (local_date, id) so two rows written on the same
+ * day keep their insertion order, which is what the chain counter relies on.
+ */
+export async function getNudges(): Promise<NudgeRecord[]> {
+  const rows = await query(
+    `SELECT id, to_char(local_date, 'YYYY-MM-DD') AS local_date, type, repo_names,
+            outcome, pushed, shrunk, parent_type, title, body, note
+     FROM nudges ORDER BY local_date, id`
+  );
+  return rows.map((row) => ({
+    ...row,
+    repo_names: (row.repo_names as string[]) ?? [],
+  })) as unknown as NudgeRecord[];
+}
+
+export interface NudgeInput {
+  local_date: string;
+  type: NudgeType;
+  repo_names: string[];
+  pushed: boolean;
+  shrunk?: boolean;
+  parent_type?: string | null;
+  title?: string | null;
+  body?: string | null;
+  note?: string | null;
+}
+
+export async function recordNudge(nudge: NudgeInput): Promise<number> {
+  const row = await one<{ id: number }>(
+    `INSERT INTO nudges (local_date, type, repo_names, pushed, shrunk, parent_type, title, body, note)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING id`,
+    [
+      nudge.local_date,
+      nudge.type,
+      JSON.stringify(nudge.repo_names),
+      nudge.pushed,
+      nudge.shrunk ?? false,
+      nudge.parent_type ?? null,
+      nudge.title ?? null,
+      nudge.body ?? null,
+      nudge.note ?? null,
+    ]
+  );
+  return row!.id;
+}
+
+export async function setNudgeOutcome(
+  id: number,
+  outcome: NudgeOutcome,
+  evidence: string | null = null
+): Promise<void> {
+  await query(
+    `UPDATE nudges SET outcome = $2, note = COALESCE($3, note) WHERE id = $1`,
+    [id, outcome, evidence]
+  );
+}
+
+/**
+ * What the owner has actually done lately, as lib/nudge/outcomes.ts wants it.
+ *
+ * Every source here is a *deliberate* owner action — a ticked box, an answered
+ * question — never a scan result. That is the drift-guard principle from
+ * SCAN.md ("a scan is an estimate, a tick is a fact") applied to the nudge
+ * engine: a scan noticing a repo moved must not be able to tell the coach the
+ * owner responded to its nudge.
+ */
+export async function getOwnerActions(since: string): Promise<OwnerAction[]> {
+  const actions: OwnerAction[] = [];
+
+  // A ticked "besikt DB done" box, recorded with its date by clearBlocker().
+  const cleared = await query<{ name: string; cleared_blockers: ClearedBlocker[] }>(
+    `SELECT name, cleared_blockers FROM repos WHERE jsonb_array_length(cleared_blockers) > 0`
+  );
+  for (const row of cleared) {
+    for (const entry of row.cleared_blockers ?? []) {
+      if (entry.date && entry.date >= since) {
+        actions.push({ repo: row.name, date: entry.date, what: `cleared ${entry.blocker}` });
+      }
+    }
+  }
+
+  // A scope-review answer: keep, snooze, or kill.
+  const scoped = await query<{ name: string; date: string; what: string }>(
+    `SELECT name, to_char(kept_at, 'YYYY-MM-DD') AS date, 'kept in scope' AS what
+       FROM repos WHERE kept_at >= $1::date
+     UNION ALL
+     SELECT name, to_char(killed_at, 'YYYY-MM-DD'), 'killed'
+       FROM repos WHERE killed_at >= $1::date`,
+    [since]
+  );
+  actions.push(...scoped.map((r) => ({ repo: r.name, date: r.date, what: r.what })));
+
+  // An answered inbox item — no single repo behind it, so it resolves the
+  // decisions nudge, which names none either.
+  const decided = await query<{ date: string }>(
+    `SELECT to_char(resolved_at AT TIME ZONE 'UTC', 'YYYY-MM-DD') AS date
+     FROM decisions WHERE resolved_at >= $1::date`,
+    [since]
+  );
+  actions.push(...decided.map((r) => ({ repo: null, date: r.date, what: 'answered a decision' })));
+
+  // A settled drift-guard verify item.
+  const verified = await query<{ name: string | null; date: string }>(
+    `SELECT r.name, to_char(e.resolved_at AT TIME ZONE 'UTC', 'YYYY-MM-DD') AS date
+     FROM scan_events e LEFT JOIN repos r ON r.id = e.repo_id
+     WHERE e.resolved_at >= $1::date`,
+    [since]
+  );
+  actions.push(...verified.map((r) => ({ repo: r.name, date: r.date, what: 'settled a verify item' })));
+
+  return actions;
+}
+
+/** Merge keys into `settings.session_state` without clobbering the rest of it. */
+export async function patchSessionState(patch: Record<string, unknown>): Promise<void> {
+  await query(
+    `UPDATE settings SET session_state = session_state || $1::jsonb, updated_at = now() WHERE id = TRUE`,
+    [JSON.stringify(patch)]
+  );
+}
+
+/* ------------------------------------------------------- push subscriptions */
+
+export interface PushSubscriptionRow {
+  id: number;
+  endpoint: string;
+  keys: { p256dh?: string; auth?: string };
+}
+
+export async function getPushSubscriptions(): Promise<PushSubscriptionRow[]> {
+  return (await query(
+    `SELECT id, endpoint, keys FROM push_subscriptions ORDER BY id`
+  )) as unknown as PushSubscriptionRow[];
+}
+
+/** Re-subscribing the same browser refreshes its keys rather than duplicating it. */
+export async function savePushSubscription(
+  endpoint: string,
+  keys: Record<string, string>
+): Promise<void> {
+  await query(
+    `INSERT INTO push_subscriptions (endpoint, keys) VALUES ($1, $2)
+     ON CONFLICT (endpoint) DO UPDATE SET keys = EXCLUDED.keys`,
+    [endpoint, JSON.stringify(keys)]
+  );
+}
+
+/** A 404/410 from the push service means the browser threw the subscription away. */
+export async function deletePushSubscription(endpoint: string): Promise<void> {
+  await query(`DELETE FROM push_subscriptions WHERE endpoint = $1`, [endpoint]);
+}
+
+/* ----------------------------------------------------------- chat grounding */
+
+/** The last few scan results for one repo — context for the read-only chat panel. */
+export async function getRecentScanEvents(repoId: number, limit = 5): Promise<
+  { created_at: string; applied: boolean; verify_reason: string | null; findings: Record<string, unknown> }[]
+> {
+  return (await query(
+    `SELECT created_at, applied, verify_reason, findings
+     FROM scan_events WHERE repo_id = $1 ORDER BY created_at DESC LIMIT $2`,
+    [repoId, limit]
+  )) as unknown as {
+    created_at: string;
+    applied: boolean;
+    verify_reason: string | null;
+    findings: Record<string, unknown>;
+  }[];
+}
+
+export async function getRepoById(id: number): Promise<Repo | null> {
+  const row = await one(`SELECT ${REPO_COLUMNS} FROM repos WHERE id = $1`, [id]);
+  return row ? normalize(row) : null;
 }
