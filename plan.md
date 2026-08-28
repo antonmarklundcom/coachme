@@ -392,7 +392,50 @@ Quick decisions inbox (S1) once the app exists. Answer them there, whenever.
 
 ## 9. Build log & handoff
 
-*(empty — first entry lands when Phase O1's PR merges)*
+### O1 — Foundation (2026-08-28) — branch `claude/opus-1-foundation-prompt-jy22jx`
+
+**Now exists:** a Next.js 16 (App Router, TS) app at the repo root; the whole §2
+schema as plain SQL in `migrations/0001_init.sql` with a `schema_migrations`
+ledger; `npm run seed`, the one-time JSON → Postgres migration (53 repos, 12
+stacks, 6 decisions, settings from `data/config.json`), re-runnable and
+self-checking; `lib/score.ts`, a faithful port of `src/score.js` whose CLI output
+(`npm run queue`) is byte-identical to the legacy script's on the seeded data;
+`lib/scan/*` — planner, GitHub client, Sonnet classifier, stack refresh, drift
+guard, orchestrator — behind `/api/scan`, capped at 5 deep reads per firing and
+resumable; the owner gate (`/login` + `proxy.ts`); `vercel.json` with the Mon/Thu
+04:00 America/Asunción cron; 37 unit tests plus the 130 legacy ones.
+
+**Decisions taken (the ones §5 O1 left open):**
+- **Driver: `pg`**, not `@neondatabase/serverless` — the same pool works against
+  Neon and a local Postgres, and nothing in the app is Neon-proprietary (§8).
+  Routes that touch it declare `runtime = 'nodejs'`.
+- **Auth: a stateless signed cookie**, not the `auth_sessions` table §2 offered
+  as the alternative. The check runs in `proxy.ts` on the edge runtime, where a
+  Postgres lookup is not available; with one user and one secret a session table
+  buys nothing. `auth_sessions` is therefore **not** in the schema — the only §2
+  table deliberately omitted.
+- **Migrations are plain SQL, no ORM.** The schema is read by hand often enough
+  (by the next phase, by a session debugging a drift item) that readable DDL wins.
+- Two columns §2 did not name were added to `repos` because SCAN.md's rules need
+  them: `blocked_scans` ("owner-blocked three scans running") and
+  `newly_blocked_at` ("newly blocked on you"). Also `market` (the D2 batching
+  proxy), `pushed_at`, `scope_review_proposed`, `kept_at`, and
+  `stacks.package_name` (besikt's package is `rapportverket`; runbooks need it).
+- Next 16 deprecated `middleware.ts` in favour of `proxy.ts`; the gate uses the
+  new convention.
+
+**Deviations:** the migration ran against **local Postgres 16, not Neon** — no
+`DATABASE_URL` existed in the session (`plan.md` §7 lists it as a before-O1 human
+input). Counts matched (53/53, 12/12, `propia.node` still carries its `unblocks`).
+The scan endpoint was verified end-to-end against the real GitHub API, writing a
+`scan_events` row and updating the repo row; its Sonnet classification step ran
+its documented degraded path because no `ANTHROPIC_API_KEY` was available. Both
+are in `KNOWN-ISSUES.md` as the first things to re-run once the credentials exist.
+
+**Where O2 should look first:** `lib/queries.ts` (every read/write goes through
+it), `lib/domain.ts` (lanes, blockers, owner-minutes — the nudge ladder's
+vocabulary), `lib/scan/run.ts` for the shape a cron route takes here, and
+`proxy.ts`'s `OPEN_PATHS`, which already exempts `/api/nudge`.
 
 ## 10. Backlog
 

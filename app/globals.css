@@ -1,0 +1,76 @@
+/*
+ * Foundation-phase styling: enough for the login gate and the placeholder
+ * dashboard to be legible on a phone in either theme. Phase S1 owns the real
+ * design system — do not build on this beyond that.
+ */
+
+:root {
+  --bg: #fbfaf8;
+  --surface: #ffffff;
+  --ink: #191b1f;
+  --muted: #5d626b;
+  --line: #e3e1dc;
+  --accent: #1f6f4a;
+  --warn: #8a3d2b;
+  color-scheme: light dark;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #14161a;
+    --surface: #1b1e23;
+    --ink: #eceef1;
+    --muted: #a2a8b3;
+    --line: #2b2f36;
+    --accent: #6dd39b;
+    --warn: #f0a58c;
+  }
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font: 16px/1.55 ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+}
+
+.shell, .auth { max-width: 44rem; margin: 0 auto; padding: 2rem 1.25rem 4rem; }
+.auth { display: flex; min-height: 100dvh; align-items: center; }
+.auth form { width: 100%; }
+
+h1 { font-size: 1.6rem; letter-spacing: -0.01em; margin: 0 0 0.25rem; }
+h2 { font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); margin: 2rem 0 0.5rem; }
+.sub { color: var(--muted); margin: 0 0 1.5rem; }
+.headline { font-size: 1.15rem; font-weight: 600; }
+.warn { color: var(--warn); }
+
+ol, ul { padding-left: 1.2rem; margin: 0; }
+li { margin: 0.35rem 0; }
+
+label { display: block; font-size: 0.85rem; color: var(--muted); margin-bottom: 0.35rem; }
+
+input[type='password'] {
+  width: 100%;
+  padding: 0.7rem 0.8rem;
+  font-size: 1rem;
+  color: var(--ink);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+
+button {
+  margin-top: 1rem;
+  padding: 0.7rem 1.1rem;
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--bg);
+  background: var(--accent);
+  border: 0;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.9em; }

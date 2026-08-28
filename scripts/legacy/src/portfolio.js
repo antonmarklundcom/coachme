@@ -13,7 +13,10 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
-export const ROOT = join(HERE, '..');
+// These scripts moved to scripts/legacy/src/ when the Next.js app took over the
+// repo root (plan.md §5 O1). They are kept as reference for the algorithms the
+// app ports, and still read the same data/ directory three levels up.
+export const ROOT = join(HERE, '..', '..', '..');
 export const PORTFOLIO_PATH = join(ROOT, 'data', 'portfolio.json');
 export const NUDGES_PATH = join(ROOT, 'data', 'nudges.json');
 
