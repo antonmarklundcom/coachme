@@ -2,8 +2,11 @@
 
 Read `plan.md` FIRST, in full — plus `DESIGN.md` (the coaching logic you're
 implementing) and `SCAN.md` (the incremental-scan rules you're porting). Also skim
-`data/portfolio.json`, `data/decisions.json`, `data/stacks.json`, `data/nudges.json` —
-this is the seed data you migrate into Neon. Execute plan §5 "O1" under the autonomy
+`data/portfolio.json`, `data/decisions.json`, `data/stacks.json`, `data/nudges.json`,
+and `data/config.json` (owner timezone + hPanel baseline migrate into `settings`) —
+this is the seed data you migrate into Neon. Migrate every repo field, including the
+graph fields (`unblocks`, `depends_on`, `related`, `notes`, `cleared_blockers`) —
+the scoring and the drift guard read them. Execute plan §5 "O1" under the autonomy
 protocol §4. Build nothing outside the plan.
 
 Phase rules:
@@ -22,8 +25,10 @@ Phase rules:
 - Re-runnable; minor issues → `KNOWN-ISSUES.md`; stop only per plan §4.4 (missing
   credential with no fallback, or a schema/auth/scan-contract call risky to guess).
 
-Exit: `npm run build` green; migration run against real Neon, row count matches
-`data/portfolio.json`; `/login` gates every other route; scan endpoint writes at
+Exit: `npm run build` green; migration run against real Neon, row counts match
+`data/portfolio.json` and `data/stacks.json`, `propia.node` still carries its
+`unblocks`; `/login` gates every route except the `CRON_SECRET`-gated cron
+endpoints (Vercel Cron carries no owner cookie); scan endpoint writes at
 least one `scan_events` row when triggered with real credentials (or documents why
 it couldn't, per the graceful-degradation rule); scoring-invariant unit test passes;
 PR merged.

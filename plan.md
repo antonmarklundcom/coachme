@@ -11,6 +11,13 @@ Old `PLAN.md`, `ROUTINE.md`, `SCAN.md` become historical record of the first bui
 do not delete them, but do not follow their PR sequence or their "no hosting, ever"
 constraint. `DESIGN.md` stays authoritative for *what* the coach does.
 
+| Phase | Model | Prompt file | Plan sections |
+|---|---|---|---|
+| O1 | Opus | `prompts/opus-1-foundation.md` | §2, §5 O1 |
+| O2 | Opus | `prompts/opus-2-push-and-nudge.md` | §5 O2 |
+| S1 | Sonnet | `prompts/sonnet-1-dashboard-ui.md` | §6 S1 |
+| S2 | Sonnet | `prompts/sonnet-2-runbooks-and-polish.md` | §6 S2 |
+
 ---
 
 ## 1. Decisions already made — do not re-litigate
@@ -34,6 +41,12 @@ constraint. `DESIGN.md` stays authoritative for *what* the coach does.
   over a cheap `pushed_at` poll every few hours. Vercel Cron + the existing
   incremental-scan logic (only deep-read what actually changed) is v1. A GitHub App
   for true push-based real-time is Backlog (§10), not blocking.
+  **Hobby-plan cron budget:** Vercel Hobby allows **2 cron jobs, max once/day each,
+  with up to ~an hour of timing slop.** This build uses exactly both (scan + nudge)
+  — never add a third cron without upgrading the plan or multiplexing one endpoint.
+  The slop also means the old "scan fires an hour before the nudge" ordering is not
+  guaranteed; schedule the scan ≥3h before the nudge (see O1) so fresh state always
+  precedes the morning push.
 - **AI judgment via direct Anthropic API calls, not Claude Code sessions.** The old
   design's deep-scan ran inside a Claude Code Routine session (can clone repos, run
   arbitrary tools). The new scan runs inside a Vercel serverless function: it can only
@@ -41,6 +54,13 @@ constraint. `DESIGN.md` stays authoritative for *what* the coach does.
   API (`claude-sonnet-5` — **never Fable**, see `fable-cost-guardrail`) for
   classification. This is cheaper and fits a function timeout; it cannot clone a repo
   or run shell commands, so judgments are text-in/text-out from fetched file content.
+  Two duties the old clone-based scan carried move with it explicitly: (a) the
+  **stack-metadata refresh** (`src/runbook.js --scan` read local clones to build
+  `data/stacks.json`; the new deep scan fetches `package.json`, `.env.example`, and
+  the drizzle/prisma config via the contents API instead, so runbooks never
+  fossilize at the migrated snapshot), and (b) the **live-URL check** (a plain
+  `fetch` of `live_url` from the function — `live_url_ok` stays evidence-based,
+  never inferred).
 - **Push notifications are real Web Push (VAPID)**, replacing "push via the Claude
   app." The dashboard becomes an installable PWA (Android/iOS home-screen icon).
 - **AI chat panel is read-only advice**, grounded in a repo's stored row — it answers
@@ -59,22 +79,54 @@ Neon schema (Postgres), written in full in Phase O1 even though later phases use
 most of it — see `DESIGN.md §5` for what each field feeds:
 
 - **repos** — `id, name, github_full_name, pct, lane, blocker, tier, hostinger_account,
-  next_step, open_prs, merged_prs_30d, live_url, live_url_ok, killed, last_commit_at,
+  next_step, open_prs, merged_prs_30d, live_url, live_url_ok, launched_at,
+  unblocks jsonb, depends_on jsonb, related jsonb, unblocks_revenue boolean, notes,
+  cleared_blockers jsonb, snoozed_until, scope_review_due boolean,
+  scope_reviews_unanswered int, killed_at nullable, last_commit_at,
   last_scan_at, last_scan_head_sha, created_at, updated_at`. Lane/blocker enums match
   `data/portfolio.json` meta exactly (`lanes`, `blockers` arrays) — do not invent new
-  values without updating `DESIGN.md`.
+  values without updating `DESIGN.md`. The graph fields (`unblocks`, `depends_on`,
+  `related`, `unblocks_revenue`, `notes`) exist in `data/portfolio.json` today and
+  feed `unblock_weight` in `DESIGN.md §4` / `src/score.js` — dropping them in the
+  migration would silently gut the scoring. `cleared_blockers` (list of
+  `{blocker, date}`, see `src/portfolio.js`) is what the drift guard checks to know
+  a blocker was **owner**-cleared — without it, "a blocker reappearing on a repo the
+  owner ticked clear" is undetectable. `snoozed_until` / `scope_review_due` /
+  `scope_reviews_unanswered` / `killed_at` carry the scope-review state machine
+  (`DESIGN.md §2.5`, `src/scope.js` — two ignored reviews auto-propose snooze);
+  `launched_at` feeds the momentum strip's "launches this month".
+- **stacks** — `repo_id, engine, dialect, package_manager, migrations int,
+  scripts jsonb, env_file, env_session jsonb, env_deferred_count, notes jsonb,
+  scanned_at` — one row per DB-blocked repo, seeded from `data/stacks.json`,
+  refreshed by the deep scan (§5 O1). This is what the runbook generator (S2)
+  renders from; never credentials, only names of env vars.
 - **decisions** — `id, question, needed_for, recommended, why, status
   (pending|accepted|corrected), answer, batch, created_at, resolved_at`.
-- **nudges** — `id, repo_id nullable, type, sent_at, outcome, shrunk boolean` — the
-  anti-annoyance state machine's history (`DESIGN.md §3`).
+- **nudges** — `id, repo_names jsonb, type, sent_at, outcome, shrunk boolean, note` —
+  the anti-annoyance state machine's history (`DESIGN.md §3`). `repo_names` is a
+  list, not a single FK: one nudge covers a whole DB batch ("45 min unblocks 3
+  launches"), and the per-repo cooldown rule needs every name. The daily/weekly
+  caps are evaluated in the owner's timezone from `settings`, not UTC.
 - **scan_events** — `id, repo_id, source (cron|manual), findings jsonb, applied
-  boolean, verify_reason text nullable, created_at` — every scan result, whether
-  auto-applied or held as a drift-guard verify item. This table is the audit trail;
-  never overwrite `repos` directly from a scan without writing the event first.
+  boolean, verify_reason text nullable, resolved_at nullable, resolution
+  (confirmed|rejected) nullable, created_at` — every scan result, whether
+  auto-applied or held as a drift-guard verify item. `resolved_at`/`resolution` are
+  how a verify item leaves the dashboard once the owner answers it. This table is
+  the audit trail; never overwrite `repos` directly from a scan without writing the
+  event first.
 - **push_subscriptions** — `id, endpoint, keys jsonb, created_at`.
-- **sessions** — `id, cookie_hash, created_at, expires_at` for the owner auth gate (or
-  a stateless signed cookie if the implementer prefers — pick one in O1, record the
-  choice in the build log).
+- **settings** — single row: `owner_timezone, hpanel_baseline_minutes,
+  scope_review_last, session_state jsonb`. Seeded from `data/config.json`
+  (`owner_timezone` drives "today"/Sunday-silence/one-push-a-day;
+  `hpanel_baseline_minutes` is the momentum burn-down baseline). `session_state`
+  mirrors the old `portfolio.session` object — `{batch, booked, when, done,
+  done_date}` — which ladder rules 1–2 and the momentum-repeat push read
+  (`src/select.js`); the "☐ Booked (when?)" card writes it.
+- **auth_sessions** — `id, cookie_hash, created_at, expires_at` for the owner auth
+  gate (or a stateless signed cookie if the implementer prefers — pick one in O1,
+  record the choice in the build log). Named `auth_sessions`, not `sessions` — in
+  this app a "session" means a booked hPanel sitting, and that collision would
+  confuse every later phase.
 
 ## 3. Feature scope
 
@@ -144,10 +196,19 @@ most of it — see `DESIGN.md §5` for what each field feeds:
   plain SQL, no ORM required unless the implementer strongly prefers one — if so,
   Drizzle, matching Anton's usual stack per `nodejs-mysql-hostinger-stack`).
 - One-time migration script: read `data/portfolio.json` + `decisions.json` +
-  `stacks.json` + `nudges.json` from this repo, write into Neon. Run it once against
+  `stacks.json` + `nudges.json` + `data/config.json` (timezone, hPanel baseline →
+  `settings`) from this repo, write into Neon. Carry **every** repo field —
+  `unblocks`, `depends_on`, `related`, `notes`, `cleared_blockers` included, not
+  just the obvious columns; the scoring graph lives in those. Run it once against
   the real database as part of this phase's exit criteria (not just as a dry run).
 - Owner-auth: a `/login` route gated by a shared secret (`OWNER_SECRET` env var),
-  setting a signed httpOnly cookie checked by middleware on every other route.
+  setting a signed httpOnly cookie checked by middleware on every other route —
+  **except the cron endpoints** (`/api/scan`, later `/api/nudge`): Vercel Cron
+  requests carry no owner cookie, so blanket middleware would 401 the coach's own
+  heartbeat. Exclude those routes from the cookie check and require
+  `Authorization: Bearer $CRON_SECRET` on them instead (Vercel sends it
+  automatically when `CRON_SECRET` is set in project env), so they are neither
+  owner-gated nor open to the public internet.
 - Port `src/score.js`'s leverage formula (`DESIGN.md §4`) into a service module that
   queries Neon and returns the ranked launch queue + DB-batch composition. Unit-test
   the same invariant the old code tested: a 95%-done infra repo must outrank any
@@ -158,25 +219,45 @@ most of it — see `DESIGN.md §5` for what each field feeds:
      incremental" table): pushed since last scan, head moved, never scanned, blocker
      unclassified, record 30+ days stale;
   3. for each repo needing a deep scan, fetch relevant file contents via the GitHub
-     API (PLAN.md/README/etc., recent commits, open PRs) and call the Anthropic
-     Messages API (`claude-sonnet-5`) with a prompt adapted from `SCAN.md`'s scan
-     prompt, asking for the same fields (`pct, blocker, lane, next_step, open_prs,
-     live_url_ok, ...`) as strict JSON;
-  4. write every result to `scan_events`; apply the drift-guard rules from
+     API (the `SCAN.md` shortlist: PLAN.md/PROGRESS.md/TASKS.md/ROADMAP.md/
+     CLAUDE.md/AGENTS.md/README.md, recent commits, open + recently-merged PRs) and
+     call the Anthropic Messages API (`claude-sonnet-5`) with a prompt adapted from
+     `SCAN.md`'s scan prompt, asking for the same fields (`pct, blocker, lane,
+     next_step, open_prs, live_url_ok, ...`) as strict JSON — keep `SCAN.md`'s
+     "omit a field rather than guess it" rule verbatim;
+  4. for a repo whose blocker is `db-setup` (or newly classified as such), also
+     fetch `package.json`, `.env.example`, and the drizzle/prisma config and upsert
+     the `stacks` row — this replaces the old `runbook.js --scan` clone-based
+     refresh; and if the repo has a `live_url`, `fetch` it — a URL that answers is
+     the launch signal (`SCAN.md`: launched at 100%, set `launched_at`);
+  5. write every result to `scan_events`; apply the drift-guard rules from
      `SCAN.md` ("What the scan may and may not change") — percentage down or a
-     blocker reappearing on an owner-cleared repo is written as `applied: false` with
-     a `verify_reason`, never silently overwriting `repos`.
-- Vercel Cron entry (`vercel.json`) firing the scan twice weekly, matching the old
-  Mon/Thu 07:00 America/Asunción cadence (convert to UTC cron correctly, DST-aware
-  window like the old D1 answer).
-- `.env.example` documenting `DATABASE_URL`, `OWNER_SECRET`, `ANTHROPIC_API_KEY`,
-  `GITHUB_TOKEN` (read-only PAT) — all optional at build time, required at runtime,
-  each with a documented graceful-degradation behavior if absent.
+     blocker reappearing on an owner-cleared repo (per `cleared_blockers`) is
+     written as `applied: false` with a `verify_reason`, never silently
+     overwriting `repos`.
+
+  The scan must fit a serverless timeout: cap deep scans per invocation (~5, worst
+  case is a Sonnet call each) and make the endpoint resumable — `last_scan_at` /
+  `last_scan_head_sha` already encode progress, so a re-trigger continues where the
+  last run stopped instead of starting over. A cron firing that finds more work
+  than its cap does the first N and leaves the rest for the next firing (or a
+  manual re-trigger) — never one long invocation racing the timeout.
+- Vercel Cron entry (`vercel.json`) firing the scan Mon/Thu at **04:00
+  America/Asunción** (`0 7 * * 1,4` UTC — Paraguay is permanently UTC-3, no DST) —
+  earlier than the old 07:00 because Hobby cron timing has up to an hour of slop
+  (§1) and the scan must reliably land before O2's 08:00 nudge.
+- `.env.example` documenting `DATABASE_URL`, `OWNER_SECRET`, `CRON_SECRET`,
+  `ANTHROPIC_API_KEY`, `GITHUB_TOKEN` (read-only PAT) — all optional at build time,
+  required at runtime, each with a documented graceful-degradation behavior if
+  absent.
 - **Exit:** `npm run build` green; migration script run once against real Neon with a
-  row count matching `data/portfolio.json`; `/login` gates every other route; hitting
-  the scan endpoint locally (with a real `GITHUB_TOKEN`/`ANTHROPIC_API_KEY` in
-  `.env.local`, or documented as skipped if unavailable) writes at least one
-  `scan_events` row; unit tests for the scoring invariant pass; PR merged.
+  `repos` row count matching `data/portfolio.json`, a `stacks` row count matching
+  `data/stacks.json`, and one spot-checked repo (`propia.node`) whose migrated row
+  still carries its `unblocks` list; `/login` gates every route except the
+  `CRON_SECRET`-gated cron endpoints; hitting the scan endpoint locally (with a real
+  `GITHUB_TOKEN`/`ANTHROPIC_API_KEY` in `.env.local`, or documented as skipped if
+  unavailable) writes at least one `scan_events` row; unit tests for the scoring
+  invariant pass; PR merged.
 
 ### After O1 — hand off to O2 (fresh Opus session)
 Per §4.9: merge PR, pre-handoff audit, build-log entry, then
@@ -185,10 +266,14 @@ Fallback if `create_session` unavailable: continue in the same window (same mode
 
 ### O2 — Nudge engine, Web Push, PWA, AI chat endpoint
 - Port `DESIGN.md §3`'s priority ladder + anti-annoyance state machine into a
-  `app/api/nudge/route.ts` driven by Vercel Cron (daily). It reads `repos` +
-  `nudges` from Neon, decides today's action (or silence) by the same six-rule
-  ladder, writes a `nudges` row, and — if a real action was produced — sends a Web
-  Push notification.
+  `app/api/nudge/route.ts` driven by Vercel Cron (daily, 08:00 America/Asunción =
+  `0 11 * * *` UTC, the answered D1 time; gated by `CRON_SECRET` like the scan —
+  this is the second and final cron in the Hobby budget, §1). It reads `repos` +
+  `nudges` + `settings` (owner timezone decides "today", Sunday silence, and the
+  caps; `session_state` feeds ladder rules 1–2 and the momentum repeat) from Neon,
+  decides today's action (or silence) by the same six-rule ladder, writes a
+  `nudges` row, and — if a real action was produced — sends a Web Push
+  notification.
 - Web Push: generate a VAPID keypair (document it in `.env.example` as
   `VAPID_PUBLIC_KEY`/`VAPID_PRIVATE_KEY`, generated once and committed to Vercel env,
   never to the repo), a `/api/push/subscribe` route storing `push_subscriptions`, and
@@ -205,8 +290,11 @@ Fallback if `create_session` unavailable: continue in the same window (same mode
 - **Exit:** a manually-triggered `/api/nudge` run against seeded data produces a
   correct action from the ladder, and a second immediate run stays silent (same test
   the old `ROUTINE.md` specified); subscribing to push in a browser and firing a test
-  nudge delivers a real notification; the dashboard installs to an Android home
-  screen with an icon; `/api/chat` answers a question about a seeded repo and cannot
+  nudge delivers a real notification — the pre-installed headless Chromium (grant
+  notification permission programmatically) is an acceptable stand-in for a phone;
+  Anton's real device subscribes after S2 (§7); the manifest + service worker pass
+  Lighthouse's installability check (the Android home-screen install itself is also
+  a §7 human step); `/api/chat` answers a question about a seeded repo and cannot
   be made to write state (test this adversarially — ask it to "mark X done" and
   confirm nothing in Neon changes); PR merged.
 
@@ -245,9 +333,9 @@ Per §4.9: `create_session(model: "sonnet", prompt: "Read prompts/sonnet-2-runbo
 
 ### S2 — Runbooks, scope review, chat UI, deploy polish
 - Port `src/runbook.js` + `templates/runbook-*.md` into the app: given a repo's
-  stored stack metadata (migrate `data/stacks.json` in O1 if not already covered —
-  flag it if it was missed), render the same copy-paste runbook (placeholders only,
-  never real credentials) as a page/panel, replacing S1's stub.
+  `stacks` row (§2 — seeded from `data/stacks.json` in O1, kept fresh by the deep
+  scan), render the same copy-paste runbook (placeholders only, never real
+  credentials) as a page/panel, replacing S1's stub.
 - Scope review UI: monthly keep/snooze/kill per stale repo, writing the `killed`
   flag — this never touches GitHub, exactly as the old design specified (D4).
 - Wire the AI chat panel UI to O2's `/api/chat` endpoint (a simple Q&A panel per
@@ -269,15 +357,24 @@ first DB session — the entire point of this tool).
 
 ## 7. Human-inputs checklist
 
+Everything marked **before O1** must exist before the O1 prompt is pasted — O1's
+exit criteria run against the real database and real APIs, and the autonomy
+protocol (§4.4) stops the build on a missing credential with no fallback. Each env
+value goes in **two places**: the Vercel project's env settings (for the deployed
+app) and the build sessions' environment / `.env.local` (so a phase can run the
+migration and hit the scan endpoint itself).
+
 | Input | Needed for | First needed |
 |---|---|---|
-| Vercel account + project linked to this repo | Hosting | O1 |
-| Neon Postgres database + `DATABASE_URL` | State of record | O1 |
-| `GITHUB_TOKEN` — read-only PAT, `repo` scope (public repos only is enough) | Scan service | O1 |
-| `ANTHROPIC_API_KEY` | Scan classification + chat panel | O1 (scan), O2 (chat) |
-| `OWNER_SECRET` (any strong random string) | Owner-auth gate | O1 |
-| Accept the browser push-permission prompt once | Web Push | O2 |
 | **D0 — make this GitHub repo private** (unrelated to this build, still overdue) | Privacy | now |
+| Vercel account + project linked to this repo (Hobby is fine: 2 crons is exactly the budget, §1) | Hosting | before O1 |
+| Neon Postgres database + `DATABASE_URL` | State of record | before O1 |
+| `GITHUB_TOKEN` — read-only PAT, `repo` scope (public repos only is enough) | Scan service | before O1 |
+| `ANTHROPIC_API_KEY` | Scan classification + chat panel | before O1 (scan), O2 (chat) |
+| `OWNER_SECRET` (any strong random string) | Owner-auth gate | before O1 |
+| `CRON_SECRET` (any strong random string, set in Vercel env) | Gates `/api/scan` + `/api/nudge` | before O1 |
+| `VAPID_PUBLIC_KEY` / `VAPID_PRIVATE_KEY` — O2 generates the pair and prints it; paste into Vercel env, never into the repo | Web Push | O2 |
+| Open the deployed app on the phone: add to home screen, accept the push-permission prompt, confirm one test push arrives | Web Push on the real device | after S2 (the final report's first manual step) |
 
 D2/D3/D6 (Hostinger account mapping, tier confirmation, unclassified-blocker
 one-liners) no longer need answering before the build — they're just rows in the
@@ -299,7 +396,12 @@ Quick decisions inbox (S1) once the app exists. Answer them there, whenever.
 
 ## 10. Backlog
 
-- GitHub App / per-repo webhooks for real-time updates instead of Cron polling.
+- Push-based real-time updates instead of Cron polling. If ever done: a GitHub App
+  installed once on the `antonmarklundcom` account with all-repos access (one
+  install, one webhook endpoint) — **not** 53 per-repo webhooks, and note the
+  account is a user account, so there is no org-level webhook shortcut. Stays
+  Backlog because the coach only speaks once a day and scans twice a week —
+  freshness beyond the poll cadence changes nothing the owner sees.
 - Calendar integration for booking DB sessions directly from the dashboard.
 - Expanding the AI chat panel beyond single-repo Q&A (e.g. portfolio-wide questions).
 - Automatic detection of near-duplicate repos (the four `ecom`-template clones found
