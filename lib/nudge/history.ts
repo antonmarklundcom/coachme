@@ -88,6 +88,12 @@ export function pushesInWeek(history: NudgeRecord[], date: string): number {
  *
  * Keyed on the repos, not the nudge type: pointing at a different batch is a
  * different ask, and shrinking an ask that was never made would be nonsense.
+ *
+ * A `question` row ends the chain. Escalating to a question is the coach
+ * deciding this line of asking is over; when the week's mute lifts, the repo
+ * comes back to a normal ask, not to an exhausted chain that would shrink
+ * again on sight. DESIGN.md §3 says the repo "drops out of nudging for a week"
+ * — which only means anything if it comes back.
  */
 export function chainLength(history: NudgeRecord[], repos: string[], date: string): number {
   let count = 0;
@@ -97,6 +103,7 @@ export function chainLength(history: NudgeRecord[], repos: string[], date: strin
     const entry = history[i];
     if (entry.local_date >= date) continue;
     if (!(entry.repo_names ?? []).some((r) => repos.includes(r))) break;
+    if (entry.type === 'question') break;
     count++;
   }
   return count;
@@ -133,6 +140,12 @@ export function isMuted(history: NudgeRecord[], repo: string, date: string): boo
  * How many shrunk asks about this repo the owner has ignored in a row. Resets on
  * any nudge the owner acted on, which is what makes the escalation forgiving:
  * one real interaction and the coach starts over at a normal ask.
+ *
+ * It also resets at a `question` row, for the same reason `chainLength` stops
+ * there. Without that, the count can never come back down on a repo the owner
+ * simply never answers: the mute expires, the count is still at the limit, the
+ * ladder emits another question, and the top rung of the ladder — the entire
+ * point of the tool — goes silent on that batch forever.
  */
 export function shrunkIgnored(history: NudgeRecord[], repo: string): number {
   let count = 0;
@@ -140,6 +153,7 @@ export function shrunkIgnored(history: NudgeRecord[], repo: string): number {
     const entry = history[i];
     if (!(entry.repo_names ?? []).includes(repo)) continue;
     if (entry.outcome === 'acted') break;
+    if (entry.type === 'question') break;
     if (entry.type === 'shrunk' && entry.outcome === 'ignored') count++;
   }
   return count;

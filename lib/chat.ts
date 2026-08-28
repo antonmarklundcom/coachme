@@ -84,7 +84,8 @@ export async function answerRepoQuestion(repoId: number, question: string): Prom
   const [events, stack] = await Promise.all([getRecentScanEvents(repo.id, 5), getStack(repo.id)]);
 
   const eventLines = events.map((e) => {
-    const when = String(e.created_at).slice(0, 10);
+    // Already a 'YYYY-MM-DD' string from the query — see getRecentScanEvents.
+    const when = e.created_at;
     const held = e.verify_reason ? ` HELD for verification: ${e.verify_reason}` : '';
     return `${when} ${e.applied ? 'applied' : 'not applied'}${held} ${JSON.stringify(e.findings).slice(0, 300)}`;
   });

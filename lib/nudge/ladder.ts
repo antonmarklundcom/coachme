@@ -12,7 +12,7 @@
 
 import { type Repo, isDormant } from '../domain';
 import { daysBetween, weekdayOf } from '../clock';
-import { dbBatches } from '../score';
+import { batchMinutes, dbBatches } from '../score';
 import {
   CAPS,
   type NudgeRecord,
@@ -80,21 +80,30 @@ interface Candidate {
 
 /** Rung 1: a prepped DB session is waiting. The whole point of the tool. */
 function dbSessionCandidate(input: LadderInput): Candidate | null {
-  const batches = dbBatches(input.repos, { date: input.date });
-  // A batch every one of whose repos is muted has already been asked to death.
-  const batch = batches.find((b) => !b.repos.every((r) => isMuted(input.history, r, input.date)));
-  if (!batch) return null;
-  const plural = batch.repos.length === 1 ? '' : 'es';
-  return {
-    type: 'db-session',
-    repos: batch.repos,
-    batchKey: batch.key,
-    minutes: batch.minutes,
-    title: `${batch.minutes} min unblocks ${batch.repos.length} launch${plural}`,
-    body:
-      `${batch.repos.join(', ')} — everything is prepped, the runbooks are on the dashboard, ` +
-      `and it is copy-paste only. Same hPanel account for all of them.`,
-  };
+  for (const batch of dbBatches(input.repos, { date: input.date })) {
+    // A muted repo drops out of nudging entirely — not just out of batches that
+    // are muted end to end. Naming it alongside an unmuted sibling would be the
+    // coach hounding the exact repo it just decided to stop asking about, which
+    // is what DESIGN.md §3's mute exists to prevent.
+    const repos = batch.repos.filter((r) => !isMuted(input.history, r, input.date));
+    if (!repos.length) continue;
+
+    // The ask has to be honest about what is actually in it: a batch of three
+    // with one muted is a two-repo sitting, and a shorter one.
+    const minutes = repos.length === batch.repos.length ? batch.minutes : batchMinutes(repos.length);
+    const plural = repos.length === 1 ? '' : 'es';
+    return {
+      type: 'db-session',
+      repos,
+      batchKey: batch.key,
+      minutes,
+      title: `${minutes} min unblocks ${repos.length} launch${plural}`,
+      body:
+        `${repos.join(', ')} — everything is prepped, the runbooks are on the dashboard, ` +
+        `and it is copy-paste only. Same hPanel account for all of them.`,
+    };
+  }
+  return null;
 }
 
 /**
@@ -140,7 +149,7 @@ function inboxCandidate(input: LadderInput): Candidate | null {
   return {
     type: 'quick-decisions',
     repos: driftedNames,
-    title: `${items} decisions, about three minutes`,
+    title: `${items} decision${items === 1 ? '' : 's'}, about ${items === 1 ? 'a minute' : 'three minutes'}`,
     body: `${parts.join('; ')} — the recommended answers are pre-filled. Scan, tick, correct at most one.`,
   };
 }

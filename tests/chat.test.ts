@@ -96,11 +96,26 @@ describe('the chat endpoint’s guardrails', () => {
 
   it('is not in the proxy’s open paths — it stays behind the owner gate', () => {
     const proxy = read('proxy.ts');
-    const openPaths = proxy.slice(proxy.indexOf('const OPEN_PATHS'), proxy.indexOf('export default'));
+    // The array literal itself, not the surrounding prose — the doc comment for
+    // CLOSED_WITHOUT_SECRET quite reasonably mentions /api/chat.
+    const openPaths = /const OPEN_PATHS = \[([\s\S]*?)\];/.exec(proxy)?.[1] ?? '';
+    expect(openPaths).toBeTruthy();
     expect(openPaths).not.toMatch(/api\/chat/);
     // The cron routes, by contrast, must be open to the cookie check.
     expect(openPaths).toMatch(/api\/nudge/);
     expect(openPaths).toMatch(/api\/scan/);
+  });
+
+  it('refuses rather than opens when there is no OWNER_SECRET to enforce', () => {
+    // The "no secret means no gate, or the app locks shut" rule is about pages
+    // a human can recover from. An endpoint that writes rows or spends money
+    // has no such argument: a forgotten env var must cost a feature, not hand
+    // the internet a writable endpoint and an Anthropic bill.
+    const proxy = read('proxy.ts');
+    const closed = /const CLOSED_WITHOUT_SECRET = \[([^\]]*)\]/.exec(proxy)?.[1] ?? '';
+    expect(closed).toMatch(/api\/chat/);
+    expect(closed).toMatch(/api\/push\/subscribe/);
+    expect(proxy).toMatch(/status: 503/);
   });
 });
 

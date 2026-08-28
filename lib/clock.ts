@@ -62,3 +62,24 @@ export function safeTimeZone(timeZone: string | null | undefined): string {
     return 'UTC';
   }
 }
+
+/**
+ * `YYYY-MM-DD` for whatever the database handed back, in the owner's timezone.
+ *
+ * This exists because `pg` parses `TIMESTAMPTZ` into a JS `Date`, and
+ * `String(new Date()).slice(0, 10)` is `"Fri Aug 28"` — not a date this app can
+ * do arithmetic on. Every comparison downstream then silently evaluates to
+ * `false` through `NaN`, which is the worst kind of bug: the coach simply stops
+ * mentioning things, and nothing anywhere errors.
+ */
+export function localDateOf(value: Date | string | null | undefined, timeZone: string): string | null {
+  if (value == null) return null;
+  if (value instanceof Date) {
+    return Number.isNaN(value.getTime()) ? null : localDate(value, timeZone);
+  }
+  // Already a plain `YYYY-MM-DD` (a Postgres DATE via to_char): it carries no
+  // time, so there is no zone to convert and reinterpreting it would shift it.
+  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) return value;
+  const parsed = Date.parse(value);
+  return Number.isNaN(parsed) ? null : localDate(parsed, timeZone);
+}

@@ -87,6 +87,39 @@ describe('the PWA shell', () => {
   });
 });
 
+describe('failure handling', () => {
+  it('guards the prune, so one dead subscription cannot fail the whole run', () => {
+    // The nudge row is already written by the time push is attempted, so an
+    // exception here would 500 a run that can never be retried today.
+    const push = read('lib/push.ts');
+    const catchBlock = push.slice(push.indexOf('} catch (err)'));
+    const prune = catchBlock.slice(catchBlock.indexOf('deletePushSubscription'));
+    expect(catchBlock.slice(0, catchBlock.indexOf('deletePushSubscription'))).toMatch(/try \{/);
+    expect(prune).toMatch(/catch \(pruneErr\)/);
+  });
+
+  it('never lets a single failed endpoint reject the whole batch', () => {
+    // Every per-subscription body is wrapped; Promise.all only sees fulfilled
+    // promises, so `sent`/`failed`/`pruned` always add up to the subscriptions.
+    const push = read('lib/push.ts');
+    expect(push).toMatch(/await Promise\.all\(/);
+    expect(push).toMatch(/} catch \(err\) \{/);
+  });
+});
+
+describe('a dry run must not consume the day', () => {
+  it('writes no nudge row and sends nothing', () => {
+    // Recording a dry run would make `decidedOn` true and the real cron four
+    // hours later would find the day answered and deliver nothing. A preview
+    // that silently cancels the actual nudge is not a preview.
+    const run = read('lib/nudge/run.ts');
+    const guard = run.indexOf('if (opts.dryRun)');
+    expect(guard).toBeGreaterThan(-1);
+    expect(guard).toBeLessThan(run.indexOf('await recordNudge('));
+    expect(run.slice(guard, run.indexOf('await recordNudge('))).toMatch(/return \{/);
+  });
+});
+
 describe('the cron budget (plan.md §1: Vercel Hobby allows exactly two)', () => {
   const vercel = JSON.parse(read('vercel.json'));
 

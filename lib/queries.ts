@@ -12,9 +12,9 @@ import {
   type ClearedBlocker,
   type Lane,
   type Repo,
-  isoDate,
   unblockedLane,
 } from './domain';
+import { localDate, safeTimeZone } from './clock';
 import type { NudgeOutcome, NudgeRecord, NudgeType } from './nudge/history';
 import type { OwnerAction } from './nudge/outcomes';
 import { dbBatches, launchQueue, agentLane, rank, type DbBatch, type ScoredRepo } from './score';
@@ -32,6 +32,11 @@ const REPO_COLUMNS = `
   pushed_at, last_scan_at, last_scan_head_sha, blocked_scans,
   to_char(newly_blocked_at, 'YYYY-MM-DD') AS newly_blocked_at
 `;
+
+/** Whatever `pg` handed back for a timestamp, as an ISO string. */
+function asIso(value: unknown): string {
+  return value instanceof Date ? value.toISOString() : String(value);
+}
 
 function normalize(row: Record<string, unknown>): Repo {
   return {
@@ -80,17 +85,22 @@ export async function updateRepo(id: number, patch: Record<string, unknown>): Pr
  * The transition a ticked "besikt DB done" box performs: record the clear (with
  * its date) so the drift guard can tell a human tick from a stale audit, then
  * move the repo out of its owner-stalled lane.
+ *
+ * The date defaults to the OWNER's day, not UTC's. It is read back by the nudge
+ * engine (getOwnerActions) and compared against `nudges.local_date`, so a tick
+ * at 21:30 in Asunción has to be today's tick, not tomorrow's.
  */
 export async function clearBlocker(
   repo: Repo,
   blocker: Blocker,
-  { date = isoDate() }: { date?: string } = {}
+  { date }: { date?: string } = {}
 ): Promise<void> {
+  const on = date ?? localDate(Date.now(), safeTimeZone((await getSettings()).owner_timezone));
   if (repo.blocker !== blocker) {
     throw new Error(`repo "${repo.name}" is blocked on "${repo.blocker}", not "${blocker}"`);
   }
   await updateRepo(repo.id, {
-    cleared_blockers: [...repo.cleared_blockers, { blocker, date }],
+    cleared_blockers: [...repo.cleared_blockers, { blocker, date: on }],
     blocker: 'none' as Blocker,
     lane: unblockedLane(repo.lane) as Lane,
   });
@@ -143,11 +153,23 @@ export interface Decision {
   resolved_at: string | null;
 }
 
+/**
+ * `created_at` and `resolved_at` come back as ISO strings, not `pg`'s parsed
+ * `Date`. The inbox rung slices `created_at` to a day and does arithmetic on
+ * it; a `Date` stringifies to "Fri Aug 28 2026 …", whose first ten characters
+ * are "Fri Aug 28" — which parses to NaN and makes every comparison silently
+ * false. The coach would simply stop mentioning the inbox, and nothing would
+ * error.
+ */
 export async function getDecisions(status?: Decision['status']): Promise<Decision[]> {
   const rows = status
     ? await query(`SELECT * FROM decisions WHERE status = $1 ORDER BY id`, [status])
     : await query(`SELECT * FROM decisions ORDER BY id`);
-  return rows as unknown as Decision[];
+  return rows.map((row) => ({
+    ...row,
+    created_at: asIso(row.created_at),
+    resolved_at: row.resolved_at ? asIso(row.resolved_at) : null,
+  })) as unknown as Decision[];
 }
 
 /* -------------------------------------------------------------------- stacks */
@@ -242,7 +264,7 @@ export async function getOpenVerifyItems(): Promise<VerifyItem[]> {
      WHERE e.verify_reason IS NOT NULL AND e.resolved_at IS NULL
      ORDER BY e.created_at DESC`
   );
-  return rows as unknown as VerifyItem[];
+  return rows.map((row) => ({ ...row, created_at: asIso(row.created_at) })) as unknown as VerifyItem[];
 }
 
 export async function resolveVerifyItem(id: number, resolution: 'confirmed' | 'rejected'): Promise<void> {
@@ -338,8 +360,14 @@ export async function setNudgeOutcome(
  * SCAN.md ("a scan is an estimate, a tick is a fact") applied to the nudge
  * engine: a scan noticing a repo moved must not be able to tell the coach the
  * owner responded to its nudge.
+ *
+ * Timestamps are collapsed to a day in the OWNER's timezone, because that is
+ * the calendar `nudges.local_date` is kept in. Reading them as UTC days would
+ * post-date every evening tick by one day in Asunción (UTC-3) and let it
+ * resolve the *next* morning's nudge as "acted" — quietly clearing an
+ * escalation chain, a cooldown and a shrink counter the owner never touched.
  */
-export async function getOwnerActions(since: string): Promise<OwnerAction[]> {
+export async function getOwnerActions(since: string, timezone: string): Promise<OwnerAction[]> {
   const actions: OwnerAction[] = [];
 
   // A ticked "besikt DB done" box, recorded with its date by clearBlocker().
@@ -368,18 +396,18 @@ export async function getOwnerActions(since: string): Promise<OwnerAction[]> {
   // An answered inbox item — no single repo behind it, so it resolves the
   // decisions nudge, which names none either.
   const decided = await query<{ date: string }>(
-    `SELECT to_char(resolved_at AT TIME ZONE 'UTC', 'YYYY-MM-DD') AS date
+    `SELECT to_char(resolved_at AT TIME ZONE $2, 'YYYY-MM-DD') AS date
      FROM decisions WHERE resolved_at >= $1::date`,
-    [since]
+    [since, timezone]
   );
   actions.push(...decided.map((r) => ({ repo: null, date: r.date, what: 'answered a decision' })));
 
   // A settled drift-guard verify item.
   const verified = await query<{ name: string | null; date: string }>(
-    `SELECT r.name, to_char(e.resolved_at AT TIME ZONE 'UTC', 'YYYY-MM-DD') AS date
+    `SELECT r.name, to_char(e.resolved_at AT TIME ZONE $2, 'YYYY-MM-DD') AS date
      FROM scan_events e LEFT JOIN repos r ON r.id = e.repo_id
      WHERE e.resolved_at >= $1::date`,
-    [since]
+    [since, timezone]
   );
   actions.push(...verified.map((r) => ({ repo: r.name, date: r.date, what: 'settled a verify item' })));
 
@@ -432,7 +460,7 @@ export async function getRecentScanEvents(repoId: number, limit = 5): Promise<
   { created_at: string; applied: boolean; verify_reason: string | null; findings: Record<string, unknown> }[]
 > {
   return (await query(
-    `SELECT created_at, applied, verify_reason, findings
+    `SELECT to_char(created_at, 'YYYY-MM-DD') AS created_at, applied, verify_reason, findings
      FROM scan_events WHERE repo_id = $1 ORDER BY created_at DESC LIMIT $2`,
     [repoId, limit]
   )) as unknown as {

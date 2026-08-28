@@ -86,8 +86,18 @@ export async function sendPush(payload: PushPayload): Promise<PushResult> {
       } catch (err) {
         const status = (err as { statusCode?: number }).statusCode;
         if (status === 404 || status === 410) {
-          await deletePushSubscription(sub.endpoint);
-          result.pruned++;
+          // Guarded: this is the one database call inside the catch, and an
+          // unguarded rejection here would reject the whole Promise.all —
+          // losing the other subscriptions' results and 500-ing a run whose
+          // nudge row is already written, so it can never be retried today.
+          // A subscription that fails to delete is retried on the next push.
+          try {
+            await deletePushSubscription(sub.endpoint);
+            result.pruned++;
+          } catch (pruneErr) {
+            result.failed++;
+            console.error(`[push] could not prune a dead subscription: ${(pruneErr as Error).message}`);
+          }
           return;
         }
         result.failed++;

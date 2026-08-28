@@ -17,7 +17,7 @@
  * first would decide today from stale memory.
  */
 
-import { localDate, safeTimeZone, addDays } from '../clock';
+import { localDate, localDateOf, safeTimeZone, addDays } from '../clock';
 import {
   getDecisions,
   getNudges,
@@ -39,7 +39,7 @@ export interface NudgeRunOptions {
   /** Override today's owner-local date. Testing and replay only. */
   date?: string;
   now?: number;
-  /** Decide and record, but never deliver. Used by the dry-run CLI. */
+  /** Decide and report, writing nothing and delivering nothing. */
   dryRun?: boolean;
 }
 
@@ -90,7 +90,7 @@ export async function runNudge(opts: NudgeRunOptions): Promise<NudgeRunResult> {
   ]);
 
   // --- 1. resolve yesterday, so today is decided from current memory.
-  const actions = await getOwnerActions(activitySince(history, date));
+  const actions = await getOwnerActions(activitySince(history, date), timezone);
   const resolved = resolveOutcomes(history, actions, date);
   for (const item of resolved) {
     await setNudgeOutcome(item.id, item.outcome, item.evidence);
@@ -106,8 +106,16 @@ export async function runNudge(opts: NudgeRunOptions): Promise<NudgeRunResult> {
     repos,
     history,
     session: (settings.session_state ?? {}) as SessionState,
-    pendingDecisions: decisions.map((d) => ({ id: d.id, created_at: String(d.created_at) })),
-    verifyItems: verifyItems.map((v) => ({ repo_name: v.repo_name, created_at: String(v.created_at) })),
+    // Collapsed to an owner-local day here rather than in the ladder: the
+    // ladder is pure and must not know about timezones or driver types.
+    pendingDecisions: decisions.map((d) => ({
+      id: d.id,
+      created_at: localDateOf(d.created_at, timezone) ?? date,
+    })),
+    verifyItems: verifyItems.map((v) => ({
+      repo_name: v.repo_name,
+      created_at: localDateOf(v.created_at, timezone) ?? date,
+    })),
   });
 
   const summary = resolved.map((r) => ({ id: r.id, outcome: r.outcome }));
@@ -119,13 +127,27 @@ export async function runNudge(opts: NudgeRunOptions): Promise<NudgeRunResult> {
     return { date, timezone, source: opts.source, decision, resolved: summary, nudgeId: null, push: null, dryRun: !!opts.dryRun };
   }
 
+  // A dry run decides and reports; it does not consume the day. Recording it
+  // would make `decidedOn` true, and the real cron four hours later would find
+  // the day already answered and deliver nothing — a preview that silently
+  // cancels the actual nudge is not a preview.
+  if (opts.dryRun) {
+    console.log(`[nudge] ${date} DRY RUN ${decision.type} [${decision.repos.join(', ')}] — ${decision.reason}`);
+    return {
+      date, timezone, source: opts.source, decision, resolved: summary,
+      nudgeId: null,
+      push: { sent: 0, failed: 0, pruned: 0, skipped: 'dry run' },
+      dryRun: true,
+    };
+  }
+
   // --- 3. record the decision. Written BEFORE the push is attempted so a
   // failed delivery can never be retried into a second notification.
   const nudgeId = await recordNudge({
     local_date: date,
     type: decision.type,
     repo_names: decision.repos,
-    pushed: decision.push && !opts.dryRun,
+    pushed: decision.push,
     shrunk: !!decision.shrunk,
     parent_type: decision.parentType ?? null,
     title: decision.title ?? null,
@@ -139,15 +161,13 @@ export async function runNudge(opts: NudgeRunOptions): Promise<NudgeRunResult> {
 
   // --- 4. notify, if the ladder produced a real ask.
   let push: PushResult | null = null;
-  if (decision.push && !opts.dryRun) {
+  if (decision.push) {
     push = await sendPush({
       title: decision.title ?? 'coachme',
       body: decision.body ?? '',
       url: '/',
       tag: 'coachme-nudge',
     });
-  } else if (decision.push && opts.dryRun) {
-    push = { sent: 0, failed: 0, pruned: 0, skipped: 'dry run' };
   }
 
   console.log(

@@ -448,7 +448,7 @@ America/Asunción); `lib/push.ts` + `/api/push/subscribe` + `npm run vapid`;
 a real PWA (`public/manifest.json`, `public/sw.js`, generated icons via
 `npm run icons`) and the `PushToggle` card that subscribes a browser;
 `/api/chat`, read-only, on `claude-sonnet-5`; `lib/anthropic.ts`, now the one
-Messages-API call site for both the scan and the chat. 57 new unit tests (94
+Messages-API call site for both the scan and the chat. 73 new unit tests (110
 vitest + 130 legacy, all green).
 
 **Decisions taken (the ones §5 O2 left open):**
@@ -512,6 +512,48 @@ vitest + 130 legacy, all green).
   the path imports three SELECT-only functions, reaches no write function,
   declares no tools, and never parses the reply — all pinned in
   `tests/chat.test.ts`.
+
+**The pre-handoff audit caught eight things, all fixed before merge.** Worth
+recording because most were invisible to a green test suite:
+
+- **The inbox rung was silently dead.** `pg` parses `TIMESTAMPTZ` into a JS
+  `Date`, and `String(date).slice(0, 10)` is `"Fri Aug 28"` — which parses to
+  `NaN`, so `>= 7 days old` was always false. A single decision could have sat
+  in the inbox forever without the coach ever mentioning it, and nothing would
+  have errored. The tests passed because fixtures hand-fed ISO strings, which
+  production never does. Fixed at the query layer (`asIso`, `to_char`) plus
+  `localDateOf` in `lib/clock.ts`; the regression test now builds its date the
+  way the database does. **A lesson for later phases: a test that hand-writes a
+  date string is not testing the date handling.**
+- **A repo that reached the question stage was muted forever**, not for a week.
+  `shrunkIgnored` only reset on an `acted` outcome, so an unanswered question
+  left the count at the limit; when the mute expired the ladder emitted another
+  question and re-muted. The top rung would have gone permanently silent on that
+  batch. Both `shrunkIgnored` and `chainLength` now stop at a `question` row —
+  escalating to a question ends that line of asking, and the week's silence is
+  followed by a normal ask, which is the only reading of §3 that means anything.
+- **`--dry-run` cancelled the real nudge.** It recorded a row, so the 08:00 cron
+  found the day already decided and delivered nothing. A dry run now writes
+  nothing and sends nothing.
+- **Owner-action dates were UTC days compared against owner-local ones.** A tick
+  at 21:30 in Asunción stored as tomorrow could resolve the *next* morning's
+  nudge as "acted", clearing a chain, a cooldown and a shrink counter the owner
+  never touched. `getOwnerActions` now converts in SQL (`AT TIME ZONE`), and
+  `clearBlocker` stamps the owner's day by default.
+- **A muted repo was still named** whenever it shared a batch with an unmuted
+  sibling — the coach hounding the exact repo it had just stopped asking about.
+  The ask now drops muted repos and tells the truth about the shorter sitting
+  ("35 min unblocks 2 launches", not 45/3). This one matched the legacy code
+  exactly, so it is a fixed legacy defect rather than a regression.
+- **An unguarded `await` in `sendPush`'s catch** could reject the whole
+  `Promise.all` and 500 a run whose nudge row was already written — unretryable
+  for the rest of the day. Guarded.
+- **Scan-event dates reached the chat model as `"Mon Aug 10"`**, same root cause
+  as the first item. Formatted in SQL now.
+- **`/api/push/subscribe` and `/api/chat` failed open with no `OWNER_SECRET`.**
+  O1's "no secret means no gate, or the app locks shut" rule is about pages a
+  human can recover from; it does not extend to an endpoint that writes rows or
+  spends Anthropic tokens. Those two now return 503. Pages are unchanged.
 
 **Deviations / still open:** the same two as O1, unchanged — no Neon
 `DATABASE_URL` (0002 has only run against local Postgres 16) and no

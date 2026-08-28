@@ -12,7 +12,7 @@
 
 import { describe, expect, it } from 'vitest';
 import type { Repo } from '../lib/domain';
-import { localDate, weekKey, weekdayOf } from '../lib/clock';
+import { localDate, localDateOf, weekKey, weekdayOf } from '../lib/clock';
 import {
   CAPS,
   type NudgeRecord,
@@ -313,6 +313,7 @@ describe('the ladder, first match wins (DESIGN.md §3)', () => {
     const old = [{ id: 'D2', created_at: '2026-08-24T09:00:00Z' }];
     const decision = selectNudge(input({ date: '2026-08-31', repos: cleared, pendingDecisions: old }));
     expect(decision.type).toBe('quick-decisions');
+    expect(decision.title).toBe('1 decision, about a minute');
   });
 
   it('counts an open drift-guard verify item as an inbox item', () => {
@@ -329,7 +330,7 @@ describe('the ladder, first match wins (DESIGN.md §3)', () => {
       })
     );
     expect(decision.type).toBe('quick-decisions');
-    expect(decision.title).toMatch(/^3 decisions/);
+    expect(decision.title).toBe('3 decisions, about three minutes');
   });
 
   it('celebrates a launch rather than staying quiet about it', () => {
@@ -424,5 +425,89 @@ describe('how far back the run looks for owner activity', () => {
   it('ignores an already-resolved nudge, however old', () => {
     const old = record({ local_date: '2026-01-01', outcome: 'ignored' });
     expect(activitySince([old], WED)).toBe('2026-08-19');
+  });
+});
+
+describe('dates that arrive from the database, not from a test fixture', () => {
+  // The bug this pins: `pg` parses TIMESTAMPTZ into a JS Date, and
+  // String(date).slice(0, 10) is "Fri Aug 28" — which parses to NaN, making
+  // every comparison silently false. Fixtures that hand-feed ISO strings never
+  // see it; production never sees anything else.
+  it('turns a Date into an owner-local day', () => {
+    const at = new Date('2026-09-02T02:59:00Z'); // still 2026-09-01 in Asunción
+    expect(localDateOf(at, 'America/Asuncion')).toBe('2026-09-01');
+    expect(localDateOf(at, 'UTC')).toBe('2026-09-02');
+  });
+
+  it('leaves a plain YYYY-MM-DD alone rather than re-zoning it', () => {
+    // A Postgres DATE carries no time; reinterpreting it would shift it a day.
+    expect(localDateOf('2026-09-01', 'America/Asuncion')).toBe('2026-09-01');
+  });
+
+  it('handles an ISO timestamp string and rejects nonsense', () => {
+    expect(localDateOf('2026-09-02T02:59:00Z', 'America/Asuncion')).toBe('2026-09-01');
+    expect(localDateOf(null, 'UTC')).toBeNull();
+    expect(localDateOf(new Date('nope'), 'UTC')).toBeNull();
+  });
+
+  it('nudges a week-old inbox item — the rule that NaN dates silently disabled', () => {
+    const cleared = [repo({ name: 'besikt', blocker: 'none', lane: 'launch-agent-drivable' })];
+    const created = new Date('2026-08-21T09:00:00Z');
+    const decision = selectNudge(
+      input({
+        date: MON, // 2026-08-31, ten days later
+        repos: cleared,
+        pendingDecisions: [{ id: 'D2', created_at: localDateOf(created, 'America/Asuncion')! }],
+      })
+    );
+    expect(decision.type).toBe('quick-decisions');
+  });
+});
+
+describe('a repo comes back after its week of silence', () => {
+  // The bug this pins: shrunkIgnored and chainLength used to scan straight past
+  // the question row, so a repo the owner never answered was re-muted every
+  // week forever and the top rung of the ladder went permanently silent on it.
+  const escalation = [
+    record({ local_date: '2026-08-17', repo_names: ['besikt'], outcome: 'ignored' }),
+    record({ local_date: '2026-08-18', repo_names: ['besikt'], outcome: 'ignored' }),
+    record({ local_date: '2026-08-19', type: 'shrunk', shrunk: true, repo_names: ['besikt'], outcome: 'ignored' }),
+    record({ local_date: '2026-08-20', type: 'shrunk', shrunk: true, repo_names: ['besikt'], outcome: 'ignored' }),
+    record({ local_date: '2026-08-21', type: 'question', pushed: false, repo_names: ['besikt'], outcome: 'ignored' }),
+  ];
+
+  it('stays muted for exactly the week', () => {
+    expect(isMuted(escalation, 'besikt', '2026-08-27')).toBe(true);
+    expect(isMuted(escalation, 'besikt', '2026-08-28')).toBe(false);
+  });
+
+  it('comes back to a NORMAL ask, not to an exhausted chain', () => {
+    expect(shrunkIgnored(escalation, 'besikt')).toBe(0);
+    expect(chainLength(escalation, ['besikt'], '2026-08-28')).toBe(0);
+    const decision = selectNudge(input({ date: '2026-08-28', history: escalation }));
+    expect(decision.type).toBe('db-session');
+    expect(decision.push).toBe(true);
+  });
+});
+
+describe('a muted repo drops out of the ask it shares with a sibling', () => {
+  // DESIGN.md §3: the repo drops out of nudging. Naming it alongside an
+  // unmuted batch-mate is the coach hounding the repo it just stopped asking about.
+  const batch = ['besikt', 'idioma', 'qr'].map((name, i) =>
+    repo({ name, id: i + 1, hostinger_account: 'shared', pct: 95 - i })
+  );
+  const muted = [record({ local_date: MON, type: 'question', pushed: false, repo_names: ['besikt'], outcome: 'pending' })];
+
+  it('asks about the rest of the batch, without the muted one', () => {
+    const decision = selectNudge(input({ date: TUE, repos: batch, history: muted }));
+    expect(decision.type).toBe('db-session');
+    expect(decision.repos).not.toContain('besikt');
+    expect(decision.repos).toEqual(['idioma', 'qr']);
+  });
+
+  it('tells the truth about how long the smaller sitting takes', () => {
+    const decision = selectNudge(input({ date: TUE, repos: batch, history: muted }));
+    expect(decision.minutes).toBe(35); // two repos, not the three-repo 45
+    expect(decision.title).toBe('35 min unblocks 2 launches');
   });
 });
