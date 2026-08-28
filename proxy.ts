@@ -9,6 +9,9 @@
  *   /api/scan       — Vercel Cron carries no cookie; gated on CRON_SECRET
  *   /api/nudge      — same, added in phase O2
  *   /manifest.json, /sw.js, /icons/* — the PWA shell (O2)
+ *   /robots.txt     — says nothing about the portfolio; redirecting it to
+ *                     /login is what a crawler (and Lighthouse's SEO audit)
+ *                     reads as a broken robots.txt, not a private one (S2)
  *
  * Blanket-gating the cron routes would 401 the coach's own heartbeat, which is
  * exactly the kind of quiet failure this app cannot afford.
@@ -27,6 +30,7 @@ const OPEN_PATHS = [
   '/manifest.json',
   '/sw.js',
   '/icons',
+  '/robots.txt',
 ];
 
 /**

@@ -1,5 +1,6 @@
 import type { ScoredRepo } from '@/lib/score';
 import { AutoSubmitForm } from './AutoSubmitForm';
+import { ChatPanel } from './ChatPanel';
 import { clearRepoBlocker } from '../actions';
 
 /** DESIGN.md §2.2 — owner-blocked, ≥70%, ranked by leverage. */
@@ -41,6 +42,7 @@ export function LaunchQueue({ queue }: { queue: ScoredRepo[] }) {
                   {unblocks.length > 0 && <span className="unblocks">unblocks {unblocks.join(', ')}</span>}
                 </label>
               </AutoSubmitForm>
+              <ChatPanel repoId={repo.id} repoName={repo.name} />
             </li>
           );
         })}

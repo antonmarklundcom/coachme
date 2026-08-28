@@ -9,6 +9,8 @@ import { safeTimeZone, today as ownerToday } from '@/lib/clock';
 import { momentum } from '@/lib/momentum';
 import { databaseUrl } from '@/lib/db';
 import { getDecisions, getNudges, getOpenVerifyItems, getQueues, getSettings, getStack } from '@/lib/queries';
+import { markdownToHtml } from '@/lib/markdown';
+import { renderRunbook } from '@/lib/runbook';
 import { PushToggle } from './components/PushToggle';
 import { MomentumStrip } from './components/MomentumStrip';
 import { OneThing, type OneThingData, type OneThingRepo } from './components/OneThing';
@@ -53,13 +55,37 @@ export default async function Home() {
       names
         .map((name) => byName.get(name))
         .filter((r): r is NonNullable<typeof r> => !!r)
-        .map(async (r) => ({
-          name: r.name,
-          pct: r.pct,
-          minutes: minutesOverride ?? ownerMinutes(r),
-          stack: await getStack(r.id),
-        }))
+        .map(async (r) => {
+          const stack = await getStack(r.id);
+          return {
+            id: r.id,
+            name: r.name,
+            pct: r.pct,
+            minutes: minutesOverride ?? ownerMinutes(r),
+            stack,
+            runbookHtml: stack ? runbookHtmlFor(r.name, stack, r.pct, r.tier) : null,
+          };
+        })
     );
+  }
+
+  /**
+   * Never let a bad runbook render take the whole dashboard down with it — a
+   * malformed stacks row (or, worst case, assertNoSecrets catching something
+   * it should) degrades to the stub, same as no stack at all (plan.md §4.5).
+   */
+  function runbookHtmlFor(
+    name: string,
+    stack: NonNullable<Awaited<ReturnType<typeof getStack>>>,
+    pct: number,
+    tier: string
+  ): string | null {
+    try {
+      return markdownToHtml(renderRunbook(name, stack, { pct, tier }));
+    } catch (err) {
+      console.error(`[runbook] failed to render for ${name}`, err);
+      return null;
+    }
   }
 
   let oneThing: OneThingData = null;
