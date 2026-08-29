@@ -97,7 +97,7 @@ export function OneThing({ data, session }: { data: OneThingData; session: Sessi
           <details className="repo" key={repo.name}>
             <summary>
               <span className="repo-name">{repo.name}</span>
-              <span className="pct">{repo.pct}% · {repo.minutes} min</span>
+              <span className="pct" style={{ '--pct': repo.pct } as React.CSSProperties}>{repo.pct}% · {repo.minutes} min</span>
             </summary>
             <Runbook stack={repo.stack} html={repo.runbookHtml} />
             <ChatPanel repoId={repo.id} repoName={repo.name} />

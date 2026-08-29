@@ -75,7 +75,7 @@ export function QuickDecisions({
                   <input type="hidden" name="repo" value={repo.name} />
                   <div className="head">
                     <span className="repo-name">{repo.name}</span>
-                    <span className="pct">{repo.pct}%</span>
+                    <span className="pct" style={{ '--pct': repo.pct } as React.CSSProperties}>{repo.pct}%</span>
                   </div>
                   <input
                     className="text"
