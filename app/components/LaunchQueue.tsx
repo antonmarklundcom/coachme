@@ -30,7 +30,7 @@ export function LaunchQueue({ queue }: { queue: ScoredRepo[] }) {
                   <input type="checkbox" name="cleared" />
                   <span className="repo-name">{repo.name}</span>
                   <span className="meta">
-                    <span className="pct">{repo.pct}%</span>
+                    <span className="pct" style={{ '--pct': repo.pct } as React.CSSProperties}>{repo.pct}%</span>
                     <span className={`tag${repo.blocker === 'db-setup' ? ' db' : ''}`}>{repo.blocker}</span>
                     <span className="pct">{repoMinutes}m</span>
                   </span>

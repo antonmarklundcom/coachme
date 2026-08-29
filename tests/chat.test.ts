@@ -16,7 +16,7 @@ import { MAX_QUESTION_LENGTH } from '../lib/chat';
 import { COACH_MODEL } from '../lib/anthropic';
 
 const read = (p: string) => readFileSync(join(process.cwd(), p), 'utf8');
-const CHAT_PATH = ['app/api/chat/route.ts', 'lib/chat.ts', 'lib/anthropic.ts'];
+const CHAT_PATH = ['app/api/chat/route.ts', 'lib/chat.ts', 'lib/gemini.ts'];
 const chatSource = CHAT_PATH.map(read).join('\n');
 const queries = read('lib/queries.ts');
 
@@ -61,7 +61,7 @@ describe('the chat endpoint cannot write', () => {
   it('never declares tools, so the model has no mechanism to act', () => {
     // This is the load-bearing one: with no tools, the worst a hostile or
     // confused reply can do is *claim* to have changed something.
-    expect(read('lib/anthropic.ts')).not.toMatch(/\btools\s*:/);
+    expect(read('lib/gemini.ts')).not.toMatch(/\btools\s*:/);
     expect(chatSource).not.toMatch(/\btool_choice\b/);
   });
 
@@ -110,7 +110,7 @@ describe('the chat endpoint’s guardrails', () => {
     // The "no secret means no gate, or the app locks shut" rule is about pages
     // a human can recover from. An endpoint that writes rows or spends money
     // has no such argument: a forgotten env var must cost a feature, not hand
-    // the internet a writable endpoint and an Anthropic bill.
+    // the internet a writable endpoint and a model API bill.
     const proxy = read('proxy.ts');
     const closed = /const CLOSED_WITHOUT_SECRET = \[([^\]]*)\]/.exec(proxy)?.[1] ?? '';
     expect(closed).toMatch(/api\/chat/);
@@ -120,12 +120,18 @@ describe('the chat endpoint’s guardrails', () => {
 });
 
 describe('model policy (plan.md §4.8, fable-cost-guardrail)', () => {
-  it('uses Sonnet for both the scan and the chat panel', () => {
+  it('uses Sonnet for the scan classifier', () => {
     expect(COACH_MODEL).toBe('claude-sonnet-5');
   });
 
+  it('uses Gemini Flash for the chat panel, not Sonnet — a deliberate cost choice, not a drift', () => {
+    expect(read('lib/gemini.ts')).toMatch(/gemini-flash/);
+    expect(read('lib/chat.ts')).toMatch(/askGemini/);
+    expect(read('lib/chat.ts')).not.toMatch(/askClaude/);
+  });
+
   it('names Fable nowhere in the app', () => {
-    for (const file of [...CHAT_PATH, 'lib/scan/classify.ts', 'lib/nudge/run.ts', 'lib/push.ts']) {
+    for (const file of [...CHAT_PATH, 'lib/anthropic.ts', 'lib/scan/classify.ts', 'lib/nudge/run.ts', 'lib/push.ts']) {
       expect(read(file).toLowerCase()).not.toMatch(/claude-fable|claude-mythos/);
     }
   });

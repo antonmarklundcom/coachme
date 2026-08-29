@@ -15,7 +15,7 @@
  */
 
 import { NextResponse } from 'next/server';
-import { AnthropicUnavailable } from '@/lib/anthropic';
+import { GeminiUnavailable } from '@/lib/gemini';
 import { MAX_QUESTION_LENGTH, answerRepoQuestion } from '@/lib/chat';
 
 export const runtime = 'nodejs';
@@ -72,9 +72,9 @@ export async function POST(request: Request) {
     if (!answer) return NextResponse.json({ error: 'no such repo' }, { status: 404 });
     return NextResponse.json({ ...answer, readonly: true });
   } catch (err) {
-    if (err instanceof AnthropicUnavailable) {
+    if (err instanceof GeminiUnavailable) {
       return NextResponse.json(
-        { error: 'the chat panel needs ANTHROPIC_API_KEY — see .env.example' },
+        { error: 'the chat panel needs GEMINI_API_KEY — see .env.example' },
         { status: 503 }
       );
     }

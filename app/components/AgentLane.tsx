@@ -14,7 +14,7 @@ export function AgentLane({ lane }: { lane: ScoredRepo[] }) {
         {lane.map(({ repo }) => (
           <li key={repo.name}>
             <span className="repo-name">{repo.name}</span>
-            <span className="pct">{repo.pct}%</span>
+            <span className="pct" style={{ '--pct': repo.pct } as React.CSSProperties}>{repo.pct}%</span>
             <span className="meta">
               {repo.merged_prs_30d > 0 && <span className="tag good">{repo.merged_prs_30d} merged</span>}
               {repo.open_prs > 0 && <span className="tag">{repo.open_prs} open</span>}
