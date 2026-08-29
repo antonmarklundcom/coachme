@@ -7,7 +7,7 @@
  *
  *   1. This module's only database access is two SELECTs (lib/queries.ts:
  *      getRepoById, getRecentScanEvents). There is no write function in scope.
- *   2. No `tools` are declared on the request (lib/anthropic.ts), so the model
+ *   2. No `tools` are declared on the request (lib/gemini.ts), so the model
  *      has no mechanism to call anything — the reply is text and nothing else.
  *   3. Nothing parses the reply. It is returned to the browser as a string; no
  *      code path turns any part of it into an update.
@@ -17,9 +17,13 @@
  * is exactly the drift-guard principle this app is built on — DESIGN.md §1c and
  * SCAN.md: "a scan is an estimate, a tick is a fact". Ticking stays a deliberate
  * gesture by the owner, in the UI.
+ *
+ * Runs on Gemini Flash, not the Sonnet the scan classifier uses (lib/scan/classify.ts) —
+ * this endpoint is asked far more often and each question is a small grounded
+ * lookup, not the classifier's harder judgment call. See lib/gemini.ts.
  */
 
-import { askClaude } from './anthropic';
+import { askGemini } from './gemini';
 import { BLOCKER_MINUTES, type Repo } from './domain';
 import { getRecentScanEvents, getRepoById, getStack } from './queries';
 
@@ -97,7 +101,7 @@ export async function answerRepoQuestion(repoId: number, question: string): Prom
       `env vars needed this session: ${(stack.env_session ?? []).join(', ') || 'none recorded'}`
     : null;
 
-  const answer = await askClaude({
+  const answer = await askGemini({
     system: SYSTEM,
     prompt: `=== THE RECORD FOR THIS REPO ===\n${describeRepo(repo, stackLine, eventLines)}\n\n=== THE OWNER ASKS ===\n${question}`,
     maxTokens: 1024,
