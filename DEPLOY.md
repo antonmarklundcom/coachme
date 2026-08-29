@@ -7,7 +7,16 @@ code, but it means the app has never actually been deployed. This file is the ex
 in-order checklist to do that — the human-inputs checklist from `plan.md` §7, turned
 into commands and clicks.
 
-None of this needs a Claude Code session. It's 15–20 minutes, once.
+Most of this needs your own Vercel/GitHub/Neon account access, which a Claude Code
+session doesn't have — but a Claude Code session with this repo checked out *can*
+run the commands (`npm run vapid`, `npm run migrate`, `npm run seed`, generating
+`OWNER_SECRET`/`CRON_SECRET`) on your behalf if you paste in the connection string
+and want the convenience. The only tradeoff: whatever you paste into a session
+becomes part of that session's transcript. For a single-owner personal tool that's
+a low-stakes tradeoff most people are fine with; if you're not, run the commands
+below yourself instead, or rotate the values afterward (Neon: reset the DB
+password; secrets: regenerate and overwrite the Vercel env values — no code
+changes needed either way). It's 15–20 minutes, once.
 
 ## 1. Make the repo private (D0, overdue independent of this build)
 
