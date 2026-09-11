@@ -33,7 +33,7 @@ import {
 } from '../queries';
 import { fetchDocs, listPulls } from '../scan/github';
 import { buildPrompt, SYSTEM, withHeader } from './prompt';
-import { parsePlanText, sanitizePlan } from './sanitize';
+import { MAX_ITEMS, parsePlanText, sanitizePlan } from './sanitize';
 import { loadTemplateIndex } from './templates';
 
 export const OWNER = 'antonmarklundcom';
@@ -71,6 +71,22 @@ export async function generateForRepo(
       repo: repo.name,
       created: [],
       skipped: `"${inFlight.slug}" is already ${inFlight.status}`,
+      stage_suggestion: null,
+      degraded,
+    };
+  }
+
+  // A second guard the plan does not spell out, learned from running it: a repo
+  // whose proposals are all still waiting for a tick does not need more of
+  // them. Without this, every scan spends a Sonnet call re-proposing work the
+  // owner has already seen and not approved — the exact "nagging instead of
+  // working" failure v3 exists to correct.
+  const waiting = existing.filter((i) => i.status === 'proposed');
+  if (waiting.length >= MAX_ITEMS) {
+    return {
+      repo: repo.name,
+      created: [],
+      skipped: `${waiting.length} proposals are already waiting for a tick`,
       stage_suggestion: null,
       degraded,
     };
@@ -118,7 +134,12 @@ export async function generateForRepo(
     model: item.model,
     stage_target: item.stage_target,
     estimate_minutes: item.estimate_minutes,
-    one_liner: oneLinerFor(item.slug),
+    // An owner step is never pasted into an agent, so it does not get an agent's
+    // one-liner; it gets the line Anton reads on his phone.
+    one_liner:
+      item.kind === 'owner'
+        ? `Owner step${item.estimate_minutes ? ` (~${item.estimate_minutes} min)` : ''}: ${item.title}`
+        : oneLinerFor(item.slug),
     // The header is prepended here, not asked for: a prompt body whose branch
     // name came from a model is a prompt nothing can track (Decision D-E/D-G).
     prompt_md: withHeader(item.prompt_md, {
@@ -138,7 +159,12 @@ export async function generateForRepo(
   return {
     repo: repo.name,
     created,
-    skipped: created.length === 0 ? 'the generator proposed nothing it could stand behind' : null,
+    skipped:
+      created.length > 0
+        ? null
+        : plan.items.length > 0
+          ? 'every proposal duplicated an item this repo already has'
+          : 'the generator proposed nothing it could stand behind',
     stage_suggestion: plan.stage_suggestion,
     degraded,
   };

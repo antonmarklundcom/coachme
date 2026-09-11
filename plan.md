@@ -121,7 +121,9 @@ guess, sanitized the same way `lib/scan/classify.ts` sanitizes. Every generated
 `prompt_md` begins with the mandatory header (branch `coachme/<slug>`, PR title
 `[coachme:<slug>] …`, "read AGENTS.md / CLAUDE.md first", the exit criteria, "stop
 and open the PR when they pass"). Items land as `proposed`; a repo with an item in
-`approved…pr_open` gets no new proposals. Runs inside the deep scan (same cap of 5
+`approved…pr_open` gets no new proposals, and neither does one with 3 proposals
+still waiting for a tick (added in O3: without it every scan re-proposes work the
+owner has already declined to approve, which is the nagging v3 exists to stop). Runs inside the deep scan (same cap of 5
 per firing) and on demand at `POST /api/generate?repo=<name>`.
 
 **Ranking** (`lib/score.ts`): `money_distance = stageGap(stage) * 100 + (100 −
@@ -339,7 +341,8 @@ to Anton with the exact first actions to take in the app.
 
 | Phase | PR | Log |
 |---|---|---|
-| plan v3 | this PR | `docs/report-2026-09-11.md` |
+| plan v3 | #20 | `docs/report-2026-09-11.md` |
+| O3 | #21 | `docs/log/o3.md` |
 
 ## 10. Backlog
 

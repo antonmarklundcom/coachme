@@ -1,5 +1,5 @@
 <!-- coachme prompt template: finish-feature.
-     The generator fills the {{placeholders}} and coachme prepends the mandatory
+     The generator fills each double-braced slot and coachme prepends the mandatory
      header (branch, PR title, "read AGENTS.md first", stop when green). Do not
      write a header here. -->
 

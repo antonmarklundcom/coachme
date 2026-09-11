@@ -14,6 +14,8 @@ import {
   batchMinutes,
   dbBatches,
   launchQueue,
+  moneyDistance,
+  moneyQueue,
   rank,
   scoreRepo,
   validateCoefficients,
@@ -205,5 +207,51 @@ describe('DB batching', () => {
     }
     // Best batch first, by its top repo's leverage.
     expect(batches[0].topScore).toBeGreaterThanOrEqual(batches[batches.length - 1].topScore);
+  });
+});
+
+/**
+ * Distance to money (plan.md §2, Decision D-H) — v3's correction to v2.
+ *
+ * v2 ranked by leverage alone, which is why thirty repos could carry a revenue
+ * label while nothing recorded a price or a first customer: "almost finished"
+ * and "almost earning" are not the same question, and the coach was only ever
+ * asking the first one.
+ */
+describe('money distance', () => {
+  it('puts a live repo at 60% ahead of a building repo at 95%', () => {
+    const live = repo({ name: 'trabajo', stage: 'live', pct: 60, tier: 'revenue' });
+    const building = repo({ name: 'byggmedia', stage: 'building', pct: 95, tier: 'revenue' });
+
+    expect(moneyDistance(live)).toBeLessThan(moneyDistance(building));
+    expect(moneyQueue([live, building]).map((e) => e.repo.name)).toEqual(['trabajo', 'byggmedia']);
+
+    // …and the v2 order is the opposite one, which is the whole point.
+    expect(rank([live, building]).map((e) => e.repo.name)).toEqual(['byggmedia', 'trabajo']);
+  });
+
+  it('scores an earning, finished repo at zero and a fresh repo at the far end', () => {
+    expect(moneyDistance(repo({ name: 'x', stage: 'earning', pct: 100 }))).toBe(0);
+    expect(moneyDistance(repo({ name: 'y', stage: 'building', pct: 0 }))).toBe(600);
+  });
+
+  it('breaks ties within a stage by completion, then by leverage', () => {
+    const a = repo({ name: 'a', stage: 'deployable', pct: 95, tier: 'revenue' });
+    const b = repo({ name: 'b', stage: 'deployable', pct: 80, tier: 'revenue' });
+    expect(moneyQueue([b, a]).map((e) => e.repo.name)).toEqual(['a', 'b']);
+
+    const c = repo({ name: 'c', stage: 'deployable', pct: 80, tier: 'revenue', unblocks_revenue: true });
+    expect(moneyQueue([b, c]).map((e) => e.repo.name)).toEqual(['c', 'b']);
+  });
+
+  it('leaves the internal tools out of a queue about money', () => {
+    const tool = repo({ name: 'coachme', stage: 'live', pct: 90, tier: 'infra', revenue_model: 'internal' });
+    const product = repo({ name: 'besikt', stage: 'building', pct: 10, tier: 'revenue' });
+    expect(moneyQueue([tool, product]).map((e) => e.repo.name)).toEqual(['besikt']);
+  });
+
+  it('keeps killed and snoozed repos out, like every other queue', () => {
+    const dead = repo({ name: 'dead', stage: 'live', pct: 90, tier: 'revenue', killed_at: '2026-01-01' });
+    expect(moneyQueue([dead])).toEqual([]);
   });
 });
