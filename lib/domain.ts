@@ -33,6 +33,177 @@ export type Blocker = (typeof BLOCKERS)[number];
 export const TIERS = ['infra', 'revenue', 'experiment'] as const;
 export type Tier = (typeof TIERS)[number];
 
+/**
+ * The road from a green build to a paid invoice (plan.md §2, Decision D-C).
+ * Ordered: index is the rung, and the whole money ranking is derived from it,
+ * so the order of this array is load-bearing — not an alphabetical list.
+ *
+ *   building    it does not deploy yet
+ *   deployable  it builds and could be deployed, but is not
+ *   live        a URL answers
+ *   sellable    someone could pay: a price is stated and a rail exists
+ *   marketed    someone has been told about it
+ *   earning     someone has paid
+ */
+export const STAGES = [
+  'building',
+  'deployable',
+  'live',
+  'sellable',
+  'marketed',
+  'earning',
+] as const;
+export type Stage = (typeof STAGES)[number];
+
+export const REVENUE_MODELS = [
+  'saas',
+  'lead-gen',
+  'ecommerce',
+  'content-ads',
+  'service',
+  'internal',
+  'unknown',
+] as const;
+export type RevenueModel = (typeof REVENUE_MODELS)[number];
+
+export const CURRENCIES = ['PYG', 'SEK', 'USD', 'EUR'] as const;
+export type Currency = (typeof CURRENCIES)[number];
+
+export const PAYMENT_RAILS = [
+  'stripe',
+  'swish',
+  'bancard',
+  'transfer',
+  'whatsapp-manual',
+  'none',
+] as const;
+export type PaymentRail = (typeof PAYMENT_RAILS)[number];
+
+/** One recorded reason a repo's stage is what it is. Append-only. */
+export interface StageEvidence {
+  stage: Stage;
+  evidence: string;
+  at: string;
+  source: 'scan' | 'owner' | 'seed';
+}
+
+/** How many rungs are left between `stage` and `earning`. 0 means earning. */
+export function stageGap(stage: Stage | string): number {
+  const index = STAGES.indexOf(stage as Stage);
+  if (index < 0) return STAGES.length - 1; // unknown value: treat as furthest away
+  return STAGES.length - 1 - index;
+}
+
+/** Stage comparison in road order: negative when `a` is behind `b`. */
+export function compareStages(a: Stage | string, b: Stage | string): number {
+  return stageGap(b) - stageGap(a);
+}
+
+/**
+ * The work the desk hands out (Decision D-D). `prompt_md` is the whole prompt
+ * body, stored on the row rather than regenerated: what the owner approved and
+ * what the agent reads must be the same bytes.
+ */
+export const WORK_STATUSES = [
+  'proposed',
+  'approved',
+  'dispatched',
+  'in_progress',
+  'pr_open',
+  'merged',
+  'done',
+  'dropped',
+] as const;
+export type WorkStatus = (typeof WORK_STATUSES)[number];
+
+export const WORK_KINDS = ['agent', 'owner'] as const;
+export type WorkKind = (typeof WORK_KINDS)[number];
+
+export const WORK_TOOLS = ['claude', 'codex', 'either', 'owner'] as const;
+export type WorkTool = (typeof WORK_TOOLS)[number];
+
+/** Opus or Sonnet. Never Fable, anywhere in this codebase (plan.md §4.8). */
+export const WORK_MODELS = ['opus', 'sonnet'] as const;
+export type WorkModel = (typeof WORK_MODELS)[number];
+
+export const DISPATCH_TARGETS = ['repo-file', 'issue', 'copy'] as const;
+export type DispatchTarget = (typeof DISPATCH_TARGETS)[number];
+
+export const PR_STATES = ['open', 'green', 'red', 'conflict', 'merged'] as const;
+export type PrState = (typeof PR_STATES)[number];
+
+export interface WorkItem {
+  id: number;
+  repo_id: number;
+  slug: string;
+  title: string;
+  kind: WorkKind;
+  tool: WorkTool;
+  model: WorkModel | null;
+  stage_target: Stage;
+  prompt_md: string;
+  one_liner: string;
+  estimate_minutes: number | null;
+  status: WorkStatus;
+  source: 'generator' | 'owner' | 'scan';
+  branch: string | null;
+  pr_url: string | null;
+  pr_number: number | null;
+  pr_state: PrState | null;
+  note: string | null;
+  dispatched_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface Dispatch {
+  id: number;
+  work_item_id: number;
+  target: DispatchTarget;
+  commit_sha: string | null;
+  issue_url: string | null;
+  created_at: string;
+}
+
+export interface RevenueCheck {
+  id: number;
+  repo_id: number;
+  key: string;
+  label: string;
+  done_at: string | null;
+  source: 'playbook' | 'owner';
+}
+
+/** The branch every dispatched agent works on, and the PR-title marker (D-E). */
+export function branchFor(slug: string): string {
+  return `coachme/${slug}`;
+}
+
+export function promptPathFor(slug: string): string {
+  return `prompts/coachme/${slug}.md`;
+}
+
+export function oneLinerFor(slug: string): string {
+  return `Read ${promptPathFor(slug)} in this repo and execute it.`;
+}
+
+/** kebab-case, <= 40 chars — the shape the migration's CHECK constraint pins. */
+export function isSlug(value: unknown): value is string {
+  return typeof value === 'string' && value.length <= 40 && /^[a-z0-9]+(-[a-z0-9]+)*$/.test(value);
+}
+
+/** Best-effort slug from a title; the generator proposes, this normalizes. */
+export function toSlug(value: string): string {
+  return value
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 40)
+    .replace(/-+$/g, '');
+}
+
 /** Blockers whose owner is the owner, not an agent. */
 export const OWNER_BLOCKERS: Blocker[] = [
   'db-setup',
@@ -88,6 +259,17 @@ export interface Repo {
   related: string[];
   unblocks_revenue: boolean | null;
   notes: string | null;
+  // The launch desk (plan.md §2). `stage` is never null: 0003 defaults it.
+  stage: Stage;
+  revenue_model: RevenueModel | null;
+  price_note: string | null;
+  currency: Currency | null;
+  payment_rail: PaymentRail | null;
+  channel: string | null;
+  sell_url: string | null;
+  first_revenue_at: string | null;
+  revenue_30d: number | null;
+  stage_evidence: StageEvidence[];
   cleared_blockers: ClearedBlocker[];
   snoozed_until: string | null;
   scope_review_due: boolean;

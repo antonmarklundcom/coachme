@@ -120,8 +120,15 @@ test('db names are hPanel-safe suffixes', () => {
 });
 
 test('templates carry no credentials either', () => {
-  const dir = join(ROOT, 'templates');
-  for (const file of readdirSync(dir)) {
-    assert.doesNotThrow(() => assertNoSecrets(readFileSync(join(dir, file), 'utf8'), file));
-  }
+  // Recursive since v3: templates/prompts/ (the dispatch prompt library) holds
+  // text that gets COMMITTED to other repositories, so it is the last place a
+  // credential may appear.
+  const walk = (dir) => {
+    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+      const path = join(dir, entry.name);
+      if (entry.isDirectory()) walk(path);
+      else assert.doesNotThrow(() => assertNoSecrets(readFileSync(path, 'utf8'), entry.name));
+    }
+  };
+  walk(join(ROOT, 'templates'));
 });

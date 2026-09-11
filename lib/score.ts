@@ -16,6 +16,7 @@ import {
   isOwnerBlocked,
   isoDate,
   ownerMinutes,
+  stageGap,
   unblockedBy,
 } from './domain';
 
@@ -108,6 +109,26 @@ export interface ScoreParts {
 
 export interface ScoredRepo extends ScoreParts {
   repo: Repo;
+  /** Rungs to `earning`, tie-broken by completion. Lower is closer to money. */
+  distance: number;
+}
+
+/* -------------------------------------------------------- distance to money */
+
+/**
+ * How far this repo is from its first paid invoice (plan.md §2, Decision D-H).
+ *
+ *   money_distance = stageGap(stage) * 100 + (100 − pct)
+ *
+ * The stage term dominates completion deliberately, and that is the whole
+ * correction v3 makes to v2: a live product at 60% is closer to money than a
+ * perfect codebase that has never been deployed. Completion only breaks ties
+ * WITHIN a stage — which is exactly what it is good at, and all v2 ever had.
+ *
+ * Lower is closer. An `earning` repo at 100% scores 0.
+ */
+export function moneyDistance(repo: Pick<Repo, 'stage' | 'pct'>): number {
+  return stageGap(repo.stage) * 100 + (100 - repo.pct);
 }
 
 export interface ScoreOptions {
@@ -162,7 +183,7 @@ export function rank(repos: Repo[], { date, ...opts }: ScoreOptions = {}): Score
   const today = date ?? isoDate(opts.now ?? Date.now());
   return repos
     .filter((repo) => !isDormant(repo, today))
-    .map((repo) => ({ repo, ...scoreRepo(repo, repos, opts) }))
+    .map((repo) => ({ repo, distance: moneyDistance(repo), ...scoreRepo(repo, repos, opts) }))
     .sort(
       (a, b) => b.total - a.total || b.repo.pct - a.repo.pct || a.repo.name.localeCompare(b.repo.name)
     );
@@ -176,6 +197,24 @@ export function launchQueue(repos: Repo[], { minPct = 70, ...opts }: ScoreOption
 /** The read-only agent lane (DESIGN.md §2.4): repos an agent can move alone. */
 export function agentLane(repos: Repo[], opts: ScoreOptions = {}): ScoredRepo[] {
   return rank(repos, opts).filter((e) => !isOwnerBlocked(e.repo) && e.repo.blocker !== 'sibling');
+}
+
+/**
+ * The v3 queue (Decision D-H): distance to first revenue first, v2's leverage
+ * score second. The leverage score is not demoted to decoration — it is what
+ * chooses between two repos the same distance from money, which on this
+ * portfolio is most pairs.
+ *
+ * `internal` repos are excluded: the five infra repos will never earn money
+ * directly, so leaving them in would park them permanently at the bottom of a
+ * list whose whole purpose is "what to do next about money".
+ */
+export function moneyQueue(repos: Repo[], opts: ScoreOptions = {}): ScoredRepo[] {
+  return rank(repos, opts)
+    .filter((e) => e.repo.revenue_model !== 'internal' && e.repo.tier !== 'infra')
+    .sort(
+      (a, b) => a.distance - b.distance || b.total - a.total || a.repo.name.localeCompare(b.repo.name)
+    );
 }
 
 /* ------------------------------------------------------------------ batching */

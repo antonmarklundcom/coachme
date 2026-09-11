@@ -17,6 +17,7 @@ import { validateCoefficients, type ScoredRepo } from '../lib/score';
 function line(entry: ScoredRepo): string {
   return (
     `${entry.repo.name.padEnd(22)} ${String(entry.repo.pct).padStart(3)}%  ` +
+    `${entry.repo.stage.padEnd(11)} d${String(entry.distance).padStart(3)}  ` +
     `${entry.repo.blocker.padEnd(26)} ${String(entry.minutes).padStart(2)}min  ` +
     `score ${entry.total.toFixed(1).padStart(6)}` +
     (entry.unblocks.length ? `  → unblocks ${entry.unblocks.join(', ')}` : '')
@@ -27,13 +28,14 @@ async function main() {
   loadEnv();
   validateCoefficients();
   const argv = process.argv.slice(2);
-  const { queue, batches } = await getQueues();
+  const { queue, batches, money } = await getQueues();
 
   if (argv.includes('--json')) {
     console.log(
       JSON.stringify(
         {
           queue: queue.map((e) => ({ repo: e.repo.name, pct: e.repo.pct, blocker: e.repo.blocker, score: e.total })),
+          money: money.map((e) => ({ repo: e.repo.name, stage: e.repo.stage, distance: e.distance, score: e.total })),
           batches: batches.map((b) => ({ key: b.key, repos: b.repos, minutes: b.minutes })),
         },
         null,
@@ -42,6 +44,9 @@ async function main() {
     );
     return;
   }
+
+  console.log(`\nCLOSEST TO MONEY — ${money.length} product repos, nearest first (d = stage gap × 100 + points left)\n`);
+  money.slice(0, 10).forEach((e, i) => console.log(`${String(i + 1).padStart(2)}. ${line(e)}`));
 
   console.log(`\nLAUNCH QUEUE — ${queue.length} owner-blocked repos at ≥70%\n`);
   queue.forEach((e, i) => console.log(`${String(i + 1).padStart(2)}. ${line(e)}`));
