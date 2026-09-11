@@ -13,17 +13,38 @@
  *    continues where it stopped.
  */
 
-import { isoDate, type Repo } from '../domain';
+import { branchFor, isoDate, type Repo, type WorkItem } from '../domain';
 import {
+  getRepoById,
   getRepos,
   getSettings,
+  getWorkItems,
   recordScanEvent,
+  setStage,
+  setWorkItemStatus,
   updateRepo,
   upsertStack,
 } from '../queries';
+import { prState } from '../github/checks';
+import { statusFromGithub } from '../launch/items';
+import { proposeStage } from '../launch/stage';
+import { GeneratorUnavailable, generateForRepo } from '../generate/run';
 import { autoProposeSnooze, decideScanUpdate, stalenessSweep, type ScanFinding } from './apply';
 import { ClassifierUnavailable, classifyRepo } from './classify';
-import { checkLiveUrl, fetchDocs, getRepoInfo, listCommits, listOwnerRepos, listPulls } from './github';
+import {
+  branchExists,
+  checkLiveUrl,
+  fetchDocs,
+  getChecks,
+  getRepoInfo,
+  listClosedPullDetails,
+  listCommits,
+  listOpenPullDetails,
+  listOwnerRepos,
+  listPulls,
+} from './github';
+import { linkPulls } from './link';
+import { refreshWriteAccess } from '../github/probe';
 import { planScan, type RemoteListing } from './plan';
 import { fetchStack } from './stacks';
 
@@ -51,6 +72,127 @@ export interface ScanRunResult {
   snooze_proposed: string[];
   degraded: string[];
   events: number;
+  /** v3 (Decision D-G): work items whose GitHub state moved this run. */
+  tracked: { repo: string; slug: string; status: string; pr_state: string | null }[];
+  /** Stages raised from evidence this run (plan.md §2). */
+  staged: { repo: string; stage: string; evidence: string }[];
+  /** New proposals from the generator, per repo. */
+  proposed: { repo: string; slugs: string[] }[];
+}
+
+/** Statuses whose GitHub side is still moving, so worth a look each scan. */
+const TRACKABLE = ['dispatched', 'in_progress', 'pr_open'];
+
+/**
+ * Find the pull requests our dispatched work turned into, and advance each item
+ * (Decision D-G). Only runs for repos that actually have work in flight, so a
+ * scan of 61 repos costs nothing extra on the 58 that do not.
+ */
+async function trackWork(
+  repo: Repo,
+  fullName: string,
+  degraded: string[]
+): Promise<ScanRunResult['tracked']> {
+  const items = (await getWorkItems(repo.id)).filter((i) => TRACKABLE.includes(i.status));
+  if (items.length === 0) return [];
+
+  const moved: ScanRunResult['tracked'] = [];
+  let pulls;
+  try {
+    pulls = [...(await listOpenPullDetails(fullName)), ...(await listClosedPullDetails(fullName))];
+  } catch (err) {
+    degraded.push(`${repo.name}: pull requests unreadable (${(err as Error).message})`);
+    return [];
+  }
+
+  const linked = linkPulls(items, pulls);
+  const linkedIds = new Set(linked.map((l) => l.item.id));
+
+  for (const { item, pull } of linked) {
+    let state: ReturnType<typeof prState>;
+    try {
+      state = prState(pull, await getChecks(fullName, pull.head.sha));
+    } catch (err) {
+      degraded.push(`${repo.name}: checks unreadable for #${pull.number} (${(err as Error).message})`);
+      state = pull.merged ? 'merged' : 'open';
+    }
+    const next = statusFromGithub(item.status, { branch: true, pr: true, merged: pull.merged });
+    const updated = await setWorkItemStatus(item.id, next, {
+      pr_url: pull.html_url,
+      pr_number: pull.number,
+      pr_state: state,
+      branch: pull.head.ref,
+    });
+    moved.push({ repo: repo.name, slug: updated.slug, status: updated.status, pr_state: state });
+  }
+
+  // No PR yet: a branch that exists is the agent having started.
+  for (const item of items) {
+    if (linkedIds.has(item.id) || item.status !== 'dispatched' || item.kind !== 'agent') continue;
+    const branch = item.branch ?? branchFor(item.slug);
+    if (await branchExists(fullName, branch).catch(() => false)) {
+      const updated = await setWorkItemStatus(item.id, 'in_progress', { branch });
+      moved.push({ repo: repo.name, slug: updated.slug, status: updated.status, pr_state: null });
+    }
+  }
+
+  return moved;
+}
+
+/**
+ * Raise the stage if — and only if — this run fetched something that proves it
+ * (plan.md §2). Reads the row back first so it judges what the scan just wrote,
+ * not what it read at the start.
+ */
+async function raiseStage(
+  repoId: number,
+  date: string,
+  degraded: string[]
+): Promise<ScanRunResult['staged']> {
+  const repo = await getRepoById(repoId);
+  if (!repo) return [];
+
+  // `sellable` needs a page that answers, and the only way to know is to fetch
+  // it — the same rule the live URL has followed since v2.
+  let sellUrlOk: boolean | undefined;
+  if (repo.sell_url) {
+    sellUrlOk = await checkLiveUrl(repo.sell_url).catch(() => false);
+  }
+
+  const claim = proposeStage(repo, { sell_url_ok: sellUrlOk });
+  if (!claim) return [];
+
+  try {
+    await setStage(repo, claim, 'scan', { date });
+  } catch (err) {
+    degraded.push(`${repo.name}: stage not raised (${(err as Error).message})`);
+    return [];
+  }
+  return [{ repo: repo.name, stage: claim.stage, evidence: claim.evidence }];
+}
+
+/** Propose work for a repo the scan has just refreshed. */
+async function propose(
+  repoId: number,
+  repoName: string,
+  degraded: string[],
+  noKey: { reported: boolean }
+): Promise<ScanRunResult['proposed']> {
+  try {
+    const result = await generateForRepo(repoId);
+    degraded.push(...result.degraded);
+    return result.created.length ? [{ repo: repoName, slugs: result.created.map((i: WorkItem) => i.slug) }] : [];
+  } catch (err) {
+    if (err instanceof GeneratorUnavailable) {
+      if (!noKey.reported) {
+        degraded.push('ANTHROPIC_API_KEY is not set — no work items were proposed this run.');
+        noKey.reported = true;
+      }
+    } else {
+      degraded.push(`${repoName}: generation failed (${(err as Error).message})`);
+    }
+    return [];
+  }
 }
 
 function fullNameOf(repo: Repo): string {
@@ -176,11 +318,16 @@ export async function runScan(opts: ScanRunOptions): Promise<ScanRunResult> {
     snooze_proposed: [],
     degraded,
     events: 0,
+    tracked: [],
+    staged: [],
+    proposed: [],
   };
+  const noKey = { reported: false };
 
   // 3–5. read, record, then apply.
   for (const item of todo) {
     const repo = repos.find((r) => r.name === item.name)!;
+    const fullName = fullNameOf(repo);
     let finding: ScanFinding;
     try {
       finding = await deepScan(repo, degraded);
@@ -208,17 +355,33 @@ export async function runScan(opts: ScanRunOptions): Promise<ScanRunResult> {
     if (decision.verifyReason) result.verify.push({ repo: repo.name, reason: decision.verifyReason });
     if (decision.launched) result.launches.push(repo.name);
 
+    // v3: what the dispatched work turned into, what the evidence now supports,
+    // and what to propose next. Each is independent — one failing must not cost
+    // the others, so each reports into `degraded` and returns empty.
+    result.tracked.push(...(await trackWork(repo, fullName, degraded)));
+    result.staged.push(...(await raiseStage(repo.id, date, degraded)));
+    result.proposed.push(...(await propose(repo.id, repo.name, degraded, noKey)));
+
     // Stack metadata for DB-blocked repos — the old clone-based
     // `runbook.js --scan`, done over the API so runbooks stay current.
     const blockerAfter = (decision.patch.blocker as string) ?? repo.blocker;
     if (blockerAfter === 'db-setup') {
       try {
-        const stack = await fetchStack(fullNameOf(repo));
+        const stack = await fetchStack(fullName);
         if (stack) await upsertStack(repo.id, stack);
       } catch (err) {
         degraded.push(`${repo.name}: stack refresh failed (${(err as Error).message})`);
       }
     }
+  }
+
+  // 5b. one cheap probe per run, so the work desk knows whether to offer the
+  // repo-file dispatch or only the copy one (Decision D-F). Never fatal.
+  try {
+    const probe = await refreshWriteAccess();
+    if (!probe.ok) degraded.push(`GitHub write access unavailable: ${probe.reason}`);
+  } catch (err) {
+    degraded.push(`write-access probe failed (${(err as Error).message})`);
   }
 
   // 6. the staleness sweep, and the twice-ignored snooze proposal.

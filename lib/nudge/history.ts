@@ -31,6 +31,9 @@ export const CAPS = {
 } as const;
 
 export type NudgeType =
+  // The two v3 rungs (Decision D-J), on top of DESIGN.md §3's ladder.
+  | 'merge-prs'
+  | 'owner-step'
   | 'db-session'
   | 'booked-reminder'
   | 'quick-decisions'

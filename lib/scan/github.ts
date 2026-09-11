@@ -150,3 +150,90 @@ export async function checkLiveUrl(url: string, timeoutMs = 8000): Promise<boole
     return false;
   }
 }
+
+/* ------------------------------------------------- what a dispatched PR did */
+
+/**
+ * The read half of PR tracking (Decision D-G) and of the merge guard (D-F).
+ * All of it is GET; every write lives in lib/github/write.ts and nowhere else.
+ */
+
+export interface PullDetail extends PullInfo {
+  head: { ref: string; sha: string };
+  base: { ref: string };
+  html_url: string;
+  draft: boolean;
+  merged: boolean;
+  mergeable_state: string | null;
+}
+
+export async function getPull(fullName: string, number: number): Promise<PullDetail | null> {
+  return gh<PullDetail>(`/repos/${fullName}/pulls/${number}`);
+}
+
+/** Open PRs with their head branch — what links a PR to a work item. */
+export async function listOpenPullDetails(fullName: string): Promise<PullDetail[]> {
+  return (await gh<PullDetail[]>(`/repos/${fullName}/pulls?state=open&per_page=50`)) ?? [];
+}
+
+/** Recently updated closed PRs, so a merge between two scans is not missed. */
+export async function listClosedPullDetails(fullName: string): Promise<PullDetail[]> {
+  return (
+    (await gh<PullDetail[]>(`/repos/${fullName}/pulls?state=closed&sort=updated&direction=desc&per_page=30`)) ?? []
+  );
+}
+
+export interface CheckRun {
+  name: string;
+  status: string;
+  conclusion: string | null;
+}
+
+export interface CommitStatus {
+  state: string;
+  context: string;
+}
+
+/**
+ * Both CI surfaces GitHub has: check runs (Actions) and commit statuses.
+ *
+ * `unknown` is the load-bearing field. An empty result and an unreachable
+ * endpoint look identical once you flatten them to "no failing checks", and a
+ * merge guard that reads a 404 as "nothing is failing" is not a guard at all —
+ * so the two are kept apart here and `mergePull` refuses the unknown case.
+ */
+export async function getChecks(
+  fullName: string,
+  sha: string
+): Promise<{ runs: CheckRun[]; statuses: CommitStatus[]; unknown: boolean }> {
+  const [runs, combined] = await Promise.all([
+    gh<{ check_runs: CheckRun[] }>(`/repos/${fullName}/commits/${sha}/check-runs?per_page=100`).catch(() => null),
+    gh<{ statuses: CommitStatus[] }>(`/repos/${fullName}/commits/${sha}/status`).catch(() => null),
+  ]);
+  return {
+    runs: runs?.check_runs ?? [],
+    statuses: combined?.statuses ?? [],
+    unknown: runs === null && combined === null,
+  };
+}
+
+/** Does this branch exist? The signal that a dispatched agent has started. */
+export async function branchExists(fullName: string, branch: string): Promise<boolean> {
+  const ref = await gh<{ name: string }>(`/repos/${fullName}/branches/${encodeURIComponent(branch)}`).catch(
+    () => null
+  );
+  return !!ref;
+}
+
+/** The blob SHA of an existing file, needed to UPDATE rather than create it. */
+export async function getFileSha(fullName: string, path: string, ref?: string): Promise<string | null> {
+  const meta = await gh<{ sha: string }>(
+    `/repos/${fullName}/contents/${encodeURI(path)}${ref ? `?ref=${encodeURIComponent(ref)}` : ''}`
+  ).catch(() => null);
+  return meta?.sha ?? null;
+}
+
+/** Who the token belongs to — the read half of O4's write-access probe. */
+export async function getViewer(): Promise<{ login: string } | null> {
+  return gh<{ login: string }>('/user').catch(() => null);
+}

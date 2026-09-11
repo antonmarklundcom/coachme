@@ -35,9 +35,18 @@ const OPEN_PATHS = [
 
 /**
  * Routes that must refuse rather than open when there is no owner gate to
- * enforce: /api/push/subscribe writes rows, /api/chat spends Anthropic tokens.
+ * enforce: /api/push/subscribe writes rows, /api/chat spends Anthropic tokens,
+ * and the three v3 routes below write to other repositories or spend tokens.
  */
-const CLOSED_WITHOUT_SECRET = ['/api/push/subscribe', '/api/chat'];
+const CLOSED_WITHOUT_SECRET = [
+  '/api/push/subscribe',
+  '/api/chat',
+  // v3: these three write to OTHER repositories or spend Anthropic tokens.
+  // An ungated /api/dispatch is a stranger's commit in Anton's source trees.
+  '/api/dispatch',
+  '/api/merge',
+  '/api/generate',
+];
 
 export default async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
