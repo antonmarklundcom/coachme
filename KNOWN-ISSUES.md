@@ -3,6 +3,10 @@
 Non-blocking things a later phase (or a later session) should know. Per
 `plan.md` §4.3, minor issues land here rather than stopping a build.
 
+> 2026-09-11: v3 (`plan.md`, `docs/report-2026-09-11.md`) addresses the first item
+> below head-on — phase P0 is the deploy, S7 is the first real scan. Phase S8
+> prunes this file once those logs confirm what closed.
+
 ## From phase S2 (2026-08-28)
 
 - **The app has never actually been deployed to Vercel.** Checked directly this

@@ -5,7 +5,13 @@ shrinking the activation energy of the final-mile ops step (Hostinger DB/hosting
 to a prepped, bookable, 20-minute copy-paste session — and keep the whole portfolio
 honest about where attention should go.
 
-> **Superseded on 2026-08-28 by `plan.md`.** The coach is being rebuilt as a
+> **Superseded again on 2026-09-11 — read `docs/report-2026-09-11.md` and the v3 `plan.md` first.**
+> v2 (Vercel + Neon, phases O1–S2) shipped but was never deployed and only nagged the
+> owner; v3 turns coachme into a launch desk that writes agent prompts into each repo,
+> dispatches them to Claude Code or Codex, tracks the PRs, and measures each repo's
+> distance to first revenue. The v2 plan is kept at `docs/history/plan-v2-vercel-neon.md`.
+>
+> **Superseded on 2026-08-28 by the v2 plan (now `docs/history/plan-v2-vercel-neon.md`).** The coach is being rebuilt as a
 > Next.js app on Vercel with its state of record in Neon Postgres — the
 > *coaching logic* in `DESIGN.md` is unchanged, but the delivery architecture
 > below (Claude Artifact live-doc + Routines, "no hosting, ever") is history.
@@ -58,7 +64,8 @@ curl -X POST -H "Authorization: Bearer $CRON_SECRET" \
 
 | File | What it is |
 |---|---|
-| `plan.md` | The current (Vercel + Neon) build plan, phase-by-phase, with the build log of what each phase actually did |
+| `plan.md` | The current (v3, launch desk) build plan; `docs/history/plan-v2-vercel-neon.md` is the v2 plan with its build log |
+| `docs/report-2026-09-11.md` | Why v2 was not useful and every decision behind v3 |
 | `DEPLOY.md` | Step-by-step to actually deploy this to Vercel + Neon — no build session has ever had the credentials to do this itself, so it has to be you |
 | `DESIGN.md` | Diagnosis of the pattern + the full coaching logic: live-doc structure, nudge triggers and cadence, anti-annoyance rules, what each Routine run computes |
 | `SCAN.md` | The twice-weekly repo scan: its prompt, why it is incremental, and what a scan may and may not change |
