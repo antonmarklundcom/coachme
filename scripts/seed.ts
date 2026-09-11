@@ -20,6 +20,8 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { loadEnv } from './env';
 import { closePool, one, query } from '../lib/db';
+import { isoDate } from '../lib/domain';
+import { seedStage } from '../lib/launch/stage';
 
 const OWNER = 'antonmarklundcom';
 const DATA = join(process.cwd(), 'data');
@@ -96,6 +98,58 @@ async function seedRepos(portfolio: Json): Promise<number> {
     );
   }
   return repos.length;
+}
+
+/**
+ * The launch-desk seed (plan.md §5 O3): give every repo a stage and a revenue
+ * model from what the record already knows. A URL that answers is live, 90% is
+ * deployable, everything else is still building.
+ *
+ * Deliberately non-destructive, and that is what makes it re-runnable: a repo
+ * whose stage has EVIDENCE against it has been staged by the app since — by a
+ * scan that fetched something, or by Anton — and re-seeding from the 2026-08
+ * audit would quietly walk it backwards. Those rows are left exactly as they
+ * are. The same reasoning for `revenue_model`: only a NULL is filled in.
+ */
+async function seedStages(): Promise<{ staged: number; models: number }> {
+  const repos = await query<{ id: number; name: string; pct: number; live_url_ok: boolean | null }>(
+    `SELECT id, name, pct, live_url_ok FROM repos`
+  );
+  const at = isoDate();
+  let staged = 0;
+
+  for (const repo of repos) {
+    const stage = seedStage(repo);
+    const evidence = JSON.stringify([
+      {
+        stage,
+        evidence:
+          stage === 'live'
+            ? 'live URL answered in the 2026-08 baseline audit'
+            : stage === 'deployable'
+              ? `baseline audit recorded ${repo.pct}% complete`
+              : `baseline audit recorded ${repo.pct}% complete — not deployable yet`,
+        at,
+        source: 'seed',
+      },
+    ]);
+    const rows = await query(
+      `UPDATE repos SET stage = $2, stage_evidence = $3::jsonb, updated_at = now()
+       WHERE id = $1 AND jsonb_array_length(stage_evidence) = 0
+       RETURNING id`,
+      [repo.id, stage, evidence]
+    );
+    staged += rows.length;
+  }
+
+  // The five infra repos are tools, not products; everything else is an honest
+  // "unknown" until the money desk (S5) is filled in.
+  const models = await query(
+    `UPDATE repos SET revenue_model = CASE WHEN tier = 'infra' THEN 'internal' ELSE 'unknown' END,
+                      updated_at = now()
+     WHERE revenue_model IS NULL RETURNING id`
+  );
+  return { staged, models: models.length };
 }
 
 async function seedStacks(stacksFile: Json): Promise<number> {
@@ -216,6 +270,13 @@ async function report(portfolio: Json, stacksFile: Json) {
   const expectedRepos = (portfolio.repos as unknown[]).length;
   const expectedStacks = Object.keys(stacksFile.stacks as object).length;
 
+  const unstaged = Number(
+    (await one<{ count: string }>(`SELECT count(*)::text AS count FROM repos WHERE stage IS NULL`))!.count
+  );
+  const stages = await query<{ stage: string; count: string }>(
+    `SELECT stage, count(*)::text AS count FROM repos GROUP BY stage ORDER BY count(*) DESC`
+  );
+
   const spot = await one<{ name: string; unblocks: string[]; cleared_blockers: unknown[] }>(
     `SELECT name, unblocks, cleared_blockers FROM repos WHERE name = 'propia.node'`
   );
@@ -224,12 +285,14 @@ async function report(portfolio: Json, stacksFile: Json) {
   console.log(`  stacks     ${stacks}/${expectedStacks} ${stacks === expectedStacks ? 'ok' : 'MISMATCH'}`);
   console.log(`  decisions  ${decisions}`);
   console.log(`  nudges     ${await count('nudges')}`);
+  console.log(`  stages     ${stages.map((s) => `${s.stage} ${s.count}`).join(', ')}`);
+  console.log(`  unstaged   ${unstaged} ${unstaged === 0 ? 'ok' : 'MISMATCH'}`);
   console.log(
     `  spot-check propia.node → unblocks ${JSON.stringify(spot?.unblocks)} ` +
       `${spot?.unblocks?.length ? 'ok' : 'MISSING'}\n`
   );
 
-  if (repos !== expectedRepos || stacks !== expectedStacks || !spot?.unblocks?.length) {
+  if (repos !== expectedRepos || stacks !== expectedStacks || unstaged > 0 || !spot?.unblocks?.length) {
     process.exitCode = 1;
   }
 }
@@ -245,6 +308,8 @@ async function main() {
   }
 
   console.log(`  repos:     ${await seedRepos(portfolio)} migrated`);
+  const stages = await seedStages();
+  console.log(`  stages:    ${stages.staged} staged, ${stages.models} revenue models filled in`);
   console.log(`  stacks:    ${await seedStacks(stacksFile)} migrated`);
   console.log(`  decisions: ${await seedDecisions(read('decisions.json'))} migrated`);
   console.log(`  nudges:    ${await seedNudges(read('nudges.json'))} migrated`);
