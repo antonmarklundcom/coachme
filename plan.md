@@ -343,6 +343,7 @@ to Anton with the exact first actions to take in the app.
 |---|---|---|
 | plan v3 | #20 | `docs/report-2026-09-11.md` |
 | O3 | #21 | `docs/log/o3.md` |
+| O4 | #22 | `docs/log/o4.md` |
 
 ## 10. Backlog
 
