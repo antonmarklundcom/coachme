@@ -10,14 +10,33 @@ import { query, one } from './db';
 import {
   type Blocker,
   type ClearedBlocker,
+  type Dispatch,
+  type DispatchTarget,
   type Lane,
   type Repo,
+  type RevenueCheck,
+  type Stage,
+  type StageEvidence,
+  type WorkItem,
+  type WorkStatus,
+  isoDate,
+  oneLinerFor,
   unblockedLane,
 } from './domain';
+import { assertTransition } from './launch/items';
+import { withEvidence, type StageClaim } from './launch/stage';
 import { addDays, localDate, safeTimeZone } from './clock';
 import type { NudgeOutcome, NudgeRecord, NudgeType } from './nudge/history';
 import type { OwnerAction } from './nudge/outcomes';
-import { dbBatches, launchQueue, agentLane, rank, type DbBatch, type ScoredRepo } from './score';
+import {
+  dbBatches,
+  launchQueue,
+  agentLane,
+  moneyQueue,
+  rank,
+  type DbBatch,
+  type ScoredRepo,
+} from './score';
 
 const REPO_COLUMNS = `
   id, name, github_full_name, pct, lane, blocker, tier, hostinger_account, market,
@@ -30,7 +49,10 @@ const REPO_COLUMNS = `
   to_char(killed_at, 'YYYY-MM-DD') AS killed_at,
   to_char(last_commit_at, 'YYYY-MM-DD') AS last_commit_at,
   pushed_at, last_scan_at, last_scan_head_sha, blocked_scans,
-  to_char(newly_blocked_at, 'YYYY-MM-DD') AS newly_blocked_at
+  to_char(newly_blocked_at, 'YYYY-MM-DD') AS newly_blocked_at,
+  stage, revenue_model, price_note, currency, payment_rail, channel, sell_url,
+  to_char(first_revenue_at, 'YYYY-MM-DD') AS first_revenue_at,
+  revenue_30d, stage_evidence
 `;
 
 /** Whatever `pg` handed back for a timestamp, as an ISO string. */
@@ -45,6 +67,12 @@ function normalize(row: Record<string, unknown>): Repo {
     depends_on: (row.depends_on as string[]) ?? [],
     related: (row.related as string[]) ?? [],
     cleared_blockers: (row.cleared_blockers as Repo['cleared_blockers']) ?? [],
+    stage_evidence: (row.stage_evidence as StageEvidence[]) ?? [],
+    // `pg` hands back NUMERIC as a string to keep arbitrary precision. Money
+    // amounts here are display figures, not ledger entries, so a number is the
+    // honest type — but the conversion has to be deliberate, or `revenue_30d`
+    // silently sorts lexicographically ("9" > "1000").
+    revenue_30d: row.revenue_30d === null || row.revenue_30d === undefined ? null : Number(row.revenue_30d),
     pushed_at: row.pushed_at ? new Date(row.pushed_at as string).toISOString() : null,
     last_scan_at: row.last_scan_at ? new Date(row.last_scan_at as string).toISOString() : null,
   } as Repo;
@@ -144,17 +172,17 @@ export interface Settings {
   hpanel_baseline_minutes: number;
   scope_review_last: string | null;
   session_state: Record<string, unknown>;
+  /** Last Monday's money report (Decision D-J), written by O4, rendered by S5/S6. */
+  weekly_report: Record<string, unknown> | null;
+  /** Does GITHUB_TOKEN actually carry the D-F write scopes? O4's probe sets it. */
+  github_write_ok: boolean;
 }
 
 export async function getSettings(): Promise<Settings> {
-  const row = await one<{
-    owner_timezone: string;
-    hpanel_baseline_minutes: number;
-    scope_review_last: string | null;
-    session_state: Record<string, unknown>;
-  }>(
+  const row = await one<Settings>(
     `SELECT owner_timezone, hpanel_baseline_minutes,
-            to_char(scope_review_last, 'YYYY-MM-DD') AS scope_review_last, session_state
+            to_char(scope_review_last, 'YYYY-MM-DD') AS scope_review_last, session_state,
+            weekly_report, github_write_ok
      FROM settings WHERE id = TRUE`
   );
   return (
@@ -163,8 +191,22 @@ export async function getSettings(): Promise<Settings> {
       hpanel_baseline_minutes: 0,
       scope_review_last: null,
       session_state: {},
+      weekly_report: null,
+      github_write_ok: false,
     }
   );
+}
+
+/** Monday's money report (Decision D-J). One row, overwritten each week. */
+export async function setWeeklyReport(report: Record<string, unknown>): Promise<void> {
+  await query(`UPDATE settings SET weekly_report = $1::jsonb, updated_at = now() WHERE id = TRUE`, [
+    JSON.stringify(report),
+  ]);
+}
+
+/** Set by O4's token probe, read by the UI to grey out the repo-file dispatch. */
+export async function setGithubWriteOk(ok: boolean): Promise<void> {
+  await query(`UPDATE settings SET github_write_ok = $1, updated_at = now() WHERE id = TRUE`, [ok]);
 }
 
 /* ----------------------------------------------------------------- decisions */
@@ -328,6 +370,10 @@ export async function getQueues(opts: { date?: string; now?: number } = {}): Pro
   queue: ScoredRepo[];
   lane: ScoredRepo[];
   batches: DbBatch[];
+  /** v3's primary order (Decision D-H): closest to first revenue first. Each
+   *  entry carries `distance` and `repo.stage`, which is what the home digest
+   *  and the money desk render. */
+  money: ScoredRepo[];
 }> {
   const repos = await getRepos();
   return {
@@ -336,6 +382,7 @@ export async function getQueues(opts: { date?: string; now?: number } = {}): Pro
     queue: launchQueue(repos, opts),
     lane: agentLane(repos, opts),
     batches: dbBatches(repos, opts),
+    money: moneyQueue(repos, opts),
   };
 }
 
@@ -522,4 +569,227 @@ export async function getRecentScanEvents(repoId: number, limit = 5): Promise<
 export async function getRepoById(id: number): Promise<Repo | null> {
   const row = await one(`SELECT ${REPO_COLUMNS} FROM repos WHERE id = $1`, [id]);
   return row ? normalize(row) : null;
+}
+
+/* --------------------------------------------------- the launch desk (v3) */
+
+const WORK_COLUMNS = `
+  id, repo_id, slug, title, kind, tool, model, stage_target, prompt_md, one_liner,
+  estimate_minutes, status, source, branch, pr_url, pr_number, pr_state, note,
+  dispatched_at, created_at, updated_at
+`;
+
+function normalizeItem(row: Record<string, unknown>): WorkItem {
+  return {
+    ...row,
+    dispatched_at: row.dispatched_at ? asIso(row.dispatched_at) : null,
+    created_at: asIso(row.created_at),
+    updated_at: asIso(row.updated_at),
+  } as unknown as WorkItem;
+}
+
+/** Every work item, or one repo's. Newest first within a status, because the
+ *  desk reads top-down and the oldest `proposed` item is the least interesting. */
+export async function getWorkItems(repoId?: number): Promise<WorkItem[]> {
+  const rows = repoId
+    ? await query(`SELECT ${WORK_COLUMNS} FROM work_items WHERE repo_id = $1 ORDER BY updated_at DESC, id DESC`, [repoId])
+    : await query(`SELECT ${WORK_COLUMNS} FROM work_items ORDER BY updated_at DESC, id DESC`);
+  return rows.map(normalizeItem);
+}
+
+export async function getWorkItem(id: number): Promise<WorkItem | null> {
+  const row = await one(`SELECT ${WORK_COLUMNS} FROM work_items WHERE id = $1`, [id]);
+  return row ? normalizeItem(row) : null;
+}
+
+export async function getWorkItemsByStatus(statuses: WorkStatus[]): Promise<WorkItem[]> {
+  const rows = await query(
+    `SELECT ${WORK_COLUMNS} FROM work_items WHERE status = ANY($1::text[]) ORDER BY updated_at DESC, id DESC`,
+    [statuses]
+  );
+  return rows.map(normalizeItem);
+}
+
+export interface WorkItemInput {
+  slug: string;
+  title: string;
+  kind: WorkItem['kind'];
+  tool: WorkItem['tool'];
+  model: WorkItem['model'];
+  stage_target: Stage;
+  prompt_md: string;
+  estimate_minutes?: number | null;
+  one_liner?: string;
+}
+
+/**
+ * Insert proposals. The `one_liner` is derived, never passed in from a model:
+ * it is the exact text Anton pastes into Claude Code or Codex, and it has to
+ * match the path `lib/github/write.ts` is allowed to write (Decision D-E/D-F).
+ *
+ * A slug that already exists on this repo is skipped rather than updated — an
+ * item is a record of something that was proposed at a point in time, and the
+ * generator re-running must not rewrite a prompt the owner already approved.
+ */
+export async function createWorkItems(
+  repoId: number,
+  items: WorkItemInput[],
+  source: WorkItem['source'] = 'generator'
+): Promise<WorkItem[]> {
+  const created: WorkItem[] = [];
+  for (const item of items) {
+    const row = await one(
+      `INSERT INTO work_items (repo_id, slug, title, kind, tool, model, stage_target,
+                               prompt_md, one_liner, estimate_minutes, source)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
+       ON CONFLICT (repo_id, slug) DO NOTHING
+       RETURNING ${WORK_COLUMNS}`,
+      [
+        repoId,
+        item.slug,
+        item.title,
+        item.kind,
+        item.tool,
+        item.model,
+        item.stage_target,
+        item.prompt_md,
+        item.one_liner ?? oneLinerFor(item.slug),
+        item.estimate_minutes ?? null,
+        source,
+      ]
+    );
+    if (row) created.push(normalizeItem(row));
+  }
+  return created;
+}
+
+/**
+ * The only way `status` is ever written. The legal moves live in
+ * lib/launch/items.ts; this reads the current row first so an illegal move
+ * throws rather than quietly skipping the approval tick (Decision D-D).
+ */
+export async function setWorkItemStatus(
+  id: number,
+  status: WorkStatus,
+  patch: Partial<Pick<WorkItem, 'branch' | 'pr_url' | 'pr_number' | 'pr_state' | 'note'>> = {}
+): Promise<WorkItem> {
+  const current = await getWorkItem(id);
+  if (!current) throw new Error(`work item ${id} does not exist`);
+  assertTransition(current.status, status);
+  await updateWorkItem(id, { ...patch, status });
+  return (await getWorkItem(id))!;
+}
+
+/** Partial update of one work item. Same identifier check as `updateRepo`. */
+export async function updateWorkItem(id: number, patch: Record<string, unknown>): Promise<void> {
+  const keys = Object.keys(patch).filter((k) => patch[k] !== undefined);
+  if (keys.length === 0) return;
+  for (const key of keys) {
+    if (!/^[a-z][a-z0-9_]*$/.test(key)) throw new Error(`refusing to update suspicious column "${key}"`);
+  }
+  const sets = keys.map((k, i) => `${k} = $${i + 2}`);
+  await query(
+    `UPDATE work_items SET ${sets.join(', ')}, updated_at = now() WHERE id = $1`,
+    [id, ...keys.map((k) => patch[k])]
+  );
+}
+
+/** The audit trail of outbound writes (Decision D-E). Append-only. */
+export async function recordDispatch(
+  workItemId: number,
+  target: DispatchTarget,
+  result: { commit_sha?: string | null; issue_url?: string | null } = {}
+): Promise<Dispatch> {
+  const row = await one(
+    `INSERT INTO dispatches (work_item_id, target, commit_sha, issue_url)
+     VALUES ($1,$2,$3,$4)
+     RETURNING id, work_item_id, target, commit_sha, issue_url, created_at`,
+    [workItemId, target, result.commit_sha ?? null, result.issue_url ?? null]
+  );
+  return { ...row, created_at: asIso(row!.created_at) } as unknown as Dispatch;
+}
+
+export async function getDispatches(workItemId: number): Promise<Dispatch[]> {
+  const rows = await query(
+    `SELECT id, work_item_id, target, commit_sha, issue_url, created_at
+     FROM dispatches WHERE work_item_id = $1 ORDER BY created_at DESC, id DESC`,
+    [workItemId]
+  );
+  return rows.map((r) => ({ ...r, created_at: asIso(r.created_at) })) as unknown as Dispatch[];
+}
+
+/* ------------------------------------------------------------------ stages */
+
+/**
+ * Write a stage, with the evidence that justified it. Never call this with a
+ * lower stage from a scan: the guard is in lib/launch/stage.ts's `proposeStage`,
+ * which returns null rather than a demotion. A manual set from the UI is always
+ * allowed (Decision D-C) and records `source: 'owner'`.
+ */
+export async function setStage(
+  repo: Repo,
+  claim: StageClaim,
+  source: StageEvidence['source'] = 'owner',
+  { date }: { date?: string } = {}
+): Promise<void> {
+  await updateRepo(repo.id, {
+    stage: claim.stage,
+    stage_evidence: withEvidence(repo, claim, source, date ?? isoDate()),
+  });
+}
+
+/** The money fields (Decision D-I). Values are validated by the CHECK
+ *  constraints in 0003; this only refuses unknown COLUMN names. */
+const REVENUE_FIELDS = [
+  'revenue_model',
+  'price_note',
+  'currency',
+  'payment_rail',
+  'channel',
+  'sell_url',
+  'first_revenue_at',
+  'revenue_30d',
+] as const;
+
+export async function patchRevenue(
+  repoId: number,
+  patch: Partial<Record<(typeof REVENUE_FIELDS)[number], unknown>>
+): Promise<void> {
+  const clean: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(patch)) {
+    if (!(REVENUE_FIELDS as readonly string[]).includes(key)) {
+      throw new Error(`"${key}" is not a revenue field`);
+    }
+    clean[key] = value === '' ? null : value;
+  }
+  await updateRepo(repoId, clean);
+}
+
+/* ---------------------------------------------------------- revenue checks */
+
+export async function getRevenueChecks(repoId?: number): Promise<RevenueCheck[]> {
+  const rows = repoId
+    ? await query(`SELECT * FROM revenue_checks WHERE repo_id = $1 ORDER BY id`, [repoId])
+    : await query(`SELECT * FROM revenue_checks ORDER BY repo_id, id`);
+  return rows.map((r) => ({ ...r, done_at: r.done_at ? asIso(r.done_at) : null })) as unknown as RevenueCheck[];
+}
+
+/**
+ * Tick or un-tick one playbook check. Upserts, so S5's `ensureChecks` and a
+ * tick from the UI are the same call — a check the playbook gained last week is
+ * created by the first tick rather than needing a backfill.
+ */
+export async function setRevenueCheck(
+  repoId: number,
+  key: string,
+  input: { label?: string; done: boolean; source?: RevenueCheck['source'] }
+): Promise<void> {
+  await query(
+    `INSERT INTO revenue_checks (repo_id, key, label, done_at, source)
+     VALUES ($1,$2,$3,$4,$5)
+     ON CONFLICT (repo_id, key) DO UPDATE SET
+       done_at = EXCLUDED.done_at,
+       label = COALESCE(EXCLUDED.label, revenue_checks.label)`,
+    [repoId, key, input.label ?? key, input.done ? new Date().toISOString() : null, input.source ?? 'playbook']
+  );
 }
