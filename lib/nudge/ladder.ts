@@ -54,6 +54,22 @@ export interface LadderDecision {
   effects: { shrink?: { batch_key: string | null } };
 }
 
+/**
+ * What the launch desk has waiting (Decision D-J). Optional: the v2 rungs and
+ * every cap work exactly as before without it, which is what keeps the whole
+ * O2 test suite meaningful rather than rewritten.
+ */
+export interface LadderWork {
+  /** Items whose PR is green — one tap each. */
+  green: { repo: string; slug: string; title: string }[];
+  /** Items waiting for Anton's approval tick. Never pushes on its own. */
+  proposed: { repo: string; slug: string; title: string }[];
+  /** The one owner step on the repo closest to money, if there is one. */
+  ownerStep: { repo: string; slug: string; title: string; minutes: number | null } | null;
+}
+
+export const NO_WORK: LadderWork = { green: [], proposed: [], ownerStep: null };
+
 export interface LadderInput {
   date: string;
   repos: Repo[];
@@ -63,6 +79,8 @@ export interface LadderInput {
   pendingDecisions: { id: string; created_at: string }[];
   /** Open drift-guard items from `scan_events` — inbox items, not their own rung. */
   verifyItems: { repo_name: string | null; created_at: string }[];
+  /** v3's launch desk. Absent means "no desk", not "an empty desk that failed". */
+  work?: LadderWork;
 }
 
 interface Candidate {
@@ -74,6 +92,76 @@ interface Candidate {
   batchKey?: string | null;
   /** The momentum push is the one repeat DESIGN.md §3 permits. */
   exemptFromRepeat?: boolean;
+}
+
+/* ------------------------------------------------------- the v3 digest rungs */
+
+/**
+ * The digest line (Decision D-J), e.g.
+ *
+ *   2 PRs green · approve 1 item · owner: create the Neon DB (20 min)
+ *
+ * One line, because it is read on a lock screen. Parts that are zero are left
+ * out rather than written as "0", so a quiet day reads as a short sentence
+ * instead of a status table.
+ */
+export function digestBody(work: LadderWork): string {
+  const parts: string[] = [];
+  if (work.green.length) {
+    parts.push(`${work.green.length} PR${work.green.length === 1 ? '' : 's'} green`);
+  }
+  if (work.proposed.length) {
+    parts.push(`approve ${work.proposed.length} item${work.proposed.length === 1 ? '' : 's'}`);
+  }
+  if (work.ownerStep) {
+    const minutes = work.ownerStep.minutes ? ` (${work.ownerStep.minutes} min)` : '';
+    parts.push(`owner: ${work.ownerStep.title}${minutes}`);
+  }
+  return parts.join(' · ');
+}
+
+/**
+ * Rung 0a — green pull requests. The highest-leverage thing in the whole app:
+ * work an agent already finished, waiting on one tap. It outranks even the
+ * momentum push, because merging is what turns a dispatched prompt into a repo
+ * that actually moved.
+ */
+function mergeCandidate(input: LadderInput): Candidate | null {
+  const work = input.work ?? NO_WORK;
+  const green = work.green.filter((g) => !isMuted(input.history, g.repo, input.date));
+  if (!green.length) return null;
+  const repos = [...new Set(green.map((g) => g.repo))];
+  return {
+    type: 'merge-prs',
+    repos,
+    minutes: green.length,
+    title: `${green.length} PR${green.length === 1 ? '' : 's'} ready to merge`,
+    body: digestBody({ ...work, green }),
+  };
+}
+
+/**
+ * Rung 0b — the one owner step on the repo closest to money. Only asked when
+ * there is nothing to merge, so the coach never asks for Anton's 20 minutes
+ * while a finished PR sits there wanting 10 seconds.
+ *
+ * Proposals deliberately do NOT get a rung of their own: "you have 3 things to
+ * approve" is exactly the nagging v3 exists to stop. They ride along in the
+ * digest body when something else has already earned the push.
+ */
+function ownerStepCandidate(input: LadderInput): Candidate | null {
+  const work = input.work ?? NO_WORK;
+  const step = work.ownerStep;
+  if (!step) return null;
+  if (isMuted(input.history, step.repo, input.date)) return null;
+  if (inCooldown(input.history, step.repo, input.date)) return null;
+  return {
+    type: 'owner-step',
+    repos: [step.repo],
+    minutes: step.minutes ?? undefined,
+    title: step.minutes ? `${step.minutes} min on ${step.repo}` : `One step on ${step.repo}`,
+    body: digestBody(work),
+  };
 }
 
 /* ------------------------------------------------------------------- rungs */
@@ -243,6 +331,8 @@ export function selectNudge(input: LadderInput): LadderDecision {
 
   // --- the ladder, first match wins (DESIGN.md §3).
   const candidate =
+    mergeCandidate(input) ??
+    ownerStepCandidate(input) ??
     momentumCandidate(input) ??
     dbSessionCandidate(input) ??
     bookedCandidate(input) ??

@@ -22,6 +22,8 @@ const OK_STATUSES = new Set(['success']);
 export interface ChecksInput {
   runs: CheckRun[];
   statuses: CommitStatus[];
+  /** Neither CI endpoint answered. Not the same as "no checks" — see below. */
+  unknown?: boolean;
 }
 
 export function isPending(checks: ChecksInput): boolean {
@@ -38,8 +40,13 @@ export function isRed(checks: ChecksInput): boolean {
   );
 }
 
+/**
+ * Green means: nothing failed, nothing is still running, and we actually know
+ * that. An unreachable checks API is never green — otherwise a rate limit or a
+ * network blip would turn the merge guard off exactly when it is least visible.
+ */
 export function isGreen(checks: ChecksInput): boolean {
-  return !isRed(checks) && !isPending(checks);
+  return !checks.unknown && !isRed(checks) && !isPending(checks);
 }
 
 /**
@@ -54,6 +61,6 @@ export function prState(pull: Pick<PullDetail, 'merged' | 'state' | 'mergeable_s
   if (pull.mergeable_state === 'dirty') return 'conflict';
   if (pull.draft) return 'open';
   if (isRed(checks)) return 'red';
-  if (isPending(checks)) return 'open';
+  if (isPending(checks) || checks.unknown) return 'open';
   return 'green';
 }

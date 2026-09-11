@@ -17,10 +17,12 @@
  * first would decide today from stale memory.
  */
 
-import { localDate, localDateOf, safeTimeZone, addDays } from '../clock';
+import { localDate, localDateOf, safeTimeZone, addDays, weekdayOf } from '../clock';
+import type { Repo, WorkItem } from '../domain';
 import {
   getDecisions,
   getNudges,
+  getWorkItems,
   getOpenVerifyItems,
   getOwnerActions,
   getRepos,
@@ -29,8 +31,10 @@ import {
   recordNudge,
   setNudgeOutcome,
 } from '../queries';
+import { moneyQueue } from '../score';
+import { writeWeeklyReport, type WeeklyReport } from '../report/weekly';
 import { CAPS, type NudgeRecord } from './history';
-import { type LadderDecision, type SessionState, selectNudge } from './ladder';
+import { type LadderDecision, type LadderWork, type SessionState, selectNudge } from './ladder';
 import { resolveOutcomes } from './outcomes';
 import { pushConfigured, sendPush, type PushResult } from '../push';
 
@@ -52,6 +56,47 @@ export interface NudgeRunResult {
   nudgeId: number | null;
   push: PushResult | null;
   dryRun: boolean;
+  /** Written on Mondays only (Decision D-J); null every other day. */
+  weeklyReport: WeeklyReport | null;
+}
+
+/** Monday, in the owner's week. `weekdayOf` counts Sunday as 0. */
+export const REPORT_WEEKDAY = 1;
+
+/**
+ * What the launch desk has waiting, in the shape the ladder's two new rungs
+ * want it. Pure assembly — the ordering decision (which repo's owner step is
+ * THE owner step) is `moneyQueue`'s, so the digest and the dashboard cannot
+ * disagree about what is closest to money.
+ */
+export function collectWork(repos: Repo[], items: WorkItem[], date: string): LadderWork {
+  const nameOf = new Map(repos.map((r) => [r.id, r.name]));
+  const name = (item: WorkItem) => nameOf.get(item.repo_id) ?? String(item.repo_id);
+
+  const green = items
+    .filter((i) => i.status === 'pr_open' && i.pr_state === 'green')
+    .map((i) => ({ repo: name(i), slug: i.slug, title: i.title }));
+
+  const proposed = items
+    .filter((i) => i.status === 'proposed')
+    .map((i) => ({ repo: name(i), slug: i.slug, title: i.title }));
+
+  let ownerStep: LadderWork['ownerStep'] = null;
+  for (const entry of moneyQueue(repos, { date })) {
+    // An approved step outranks an unapproved one on the same repo: Anton has
+    // already said yes to it, so asking about anything else there is noise.
+    const candidates = items.filter(
+      (i) => i.repo_id === entry.repo.id && i.kind === 'owner' && ['approved', 'dispatched', 'proposed'].includes(i.status)
+    );
+    const step =
+      candidates.find((i) => i.status === 'approved' || i.status === 'dispatched') ?? candidates[0];
+    if (step) {
+      ownerStep = { repo: entry.repo.name, slug: step.slug, title: step.title, minutes: step.estimate_minutes };
+      break;
+    }
+  }
+
+  return { green, proposed, ownerStep };
 }
 
 /**
@@ -82,11 +127,12 @@ export async function runNudge(opts: NudgeRunOptions): Promise<NudgeRunResult> {
   const timezone = safeTimeZone(settings.owner_timezone);
   const date = opts.date ?? localDate(opts.now ?? Date.now(), timezone);
 
-  const [repos, history, decisions, verifyItems] = await Promise.all([
+  const [repos, history, decisions, verifyItems, items] = await Promise.all([
     getRepos(),
     getNudges(),
     getDecisions('pending'),
     getOpenVerifyItems(),
+    getWorkItems(),
   ]);
 
   // --- 1. resolve yesterday, so today is decided from current memory.
@@ -116,15 +162,29 @@ export async function runNudge(opts: NudgeRunOptions): Promise<NudgeRunResult> {
       repo_name: v.repo_name,
       created_at: localDateOf(v.created_at, timezone) ?? date,
     })),
+    work: collectWork(repos, items, date),
   });
 
   const summary = resolved.map((r) => ({ id: r.id, outcome: r.outcome }));
+
+  // The weekly money report rides on the Monday run rather than a third cron:
+  // the Hobby plan allows exactly two, and this needs no schedule of its own
+  // (plan.md §1, Decision D-J). Written before the decision is recorded so a
+  // failure to push cannot cost the report. A dry run writes nothing.
+  let weeklyReport: WeeklyReport | null = null;
+  if (weekdayOf(date) === REPORT_WEEKDAY && !opts.dryRun) {
+    try {
+      weeklyReport = await writeWeeklyReport(date);
+    } catch (err) {
+      console.error('[nudge] weekly report failed', err);
+    }
+  }
   if (!decision.type) {
     // A silence is not recorded: `decidedOn` would then treat the Sunday branch
     // and the "nothing qualifies" branch as a decision that blocks tomorrow's
     // run from ever reconsidering. The history holds asks, not non-asks.
     console.log(`[nudge] ${date} silent — ${decision.reason}`);
-    return { date, timezone, source: opts.source, decision, resolved: summary, nudgeId: null, push: null, dryRun: !!opts.dryRun };
+    return { date, timezone, source: opts.source, decision, resolved: summary, nudgeId: null, push: null, dryRun: !!opts.dryRun, weeklyReport };
   }
 
   // A dry run decides and reports; it does not consume the day. Recording it
@@ -138,6 +198,7 @@ export async function runNudge(opts: NudgeRunOptions): Promise<NudgeRunResult> {
       nudgeId: null,
       push: { sent: 0, failed: 0, pruned: 0, skipped: 'dry run' },
       dryRun: true,
+      weeklyReport,
     };
   }
 
@@ -176,7 +237,7 @@ export async function runNudge(opts: NudgeRunOptions): Promise<NudgeRunResult> {
       (push?.skipped ? ` (not delivered: ${push.skipped})` : '')
   );
 
-  return { date, timezone, source: opts.source, decision, resolved: summary, nudgeId, push, dryRun: !!opts.dryRun };
+  return { date, timezone, source: opts.source, decision, resolved: summary, nudgeId, push, dryRun: !!opts.dryRun, weeklyReport };
 }
 
 export { pushConfigured };

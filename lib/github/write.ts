@@ -159,6 +159,11 @@ export async function mergePull(
   }
 
   const checks = await getChecks(fullName, pull.head.sha);
+  if (checks.unknown) {
+    throw new GithubWriteRefused(
+      `${fullName}#${number}: GitHub did not answer about its checks — refusing to merge blind`
+    );
+  }
   if (!isGreen(checks)) {
     throw new GithubWriteRefused(`${fullName}#${number} is not green — refusing to merge`);
   }

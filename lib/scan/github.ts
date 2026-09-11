@@ -194,16 +194,27 @@ export interface CommitStatus {
   context: string;
 }
 
-/** Both CI surfaces GitHub has: check runs (Actions) and commit statuses. */
+/**
+ * Both CI surfaces GitHub has: check runs (Actions) and commit statuses.
+ *
+ * `unknown` is the load-bearing field. An empty result and an unreachable
+ * endpoint look identical once you flatten them to "no failing checks", and a
+ * merge guard that reads a 404 as "nothing is failing" is not a guard at all —
+ * so the two are kept apart here and `mergePull` refuses the unknown case.
+ */
 export async function getChecks(
   fullName: string,
   sha: string
-): Promise<{ runs: CheckRun[]; statuses: CommitStatus[] }> {
+): Promise<{ runs: CheckRun[]; statuses: CommitStatus[]; unknown: boolean }> {
   const [runs, combined] = await Promise.all([
     gh<{ check_runs: CheckRun[] }>(`/repos/${fullName}/commits/${sha}/check-runs?per_page=100`).catch(() => null),
     gh<{ statuses: CommitStatus[] }>(`/repos/${fullName}/commits/${sha}/status`).catch(() => null),
   ]);
-  return { runs: runs?.check_runs ?? [], statuses: combined?.statuses ?? [] };
+  return {
+    runs: runs?.check_runs ?? [],
+    statuses: combined?.statuses ?? [],
+    unknown: runs === null && combined === null,
+  };
 }
 
 /** Does this branch exist? The signal that a dispatched agent has started. */

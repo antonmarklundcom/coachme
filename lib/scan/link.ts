@@ -25,7 +25,7 @@ export function titleMarker(slug: string): string {
   return `[coachme:${slug}]`;
 }
 
-export function matches(item: Pick<WorkItem, 'slug'>, pull: PullDetail): boolean {
+export function matches(item: { slug: string }, pull: PullDetail): boolean {
   return pull.head?.ref === branchFor(item.slug) || (pull.title ?? '').includes(titleMarker(item.slug));
 }
 
