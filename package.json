@@ -1,41 +1,36 @@
 {
   "name": "coachme",
-  "version": "0.2.0",
+  "version": "4.0.0",
   "private": true,
-  "description": "Portfolio focus coach — state of record in Neon, leverage scoring, twice-weekly repo scan, dashboard on Vercel.",
+  "description": "Local-first control tower for Anton's portfolio: what is broken, what is closest to money, the 3 things to do today.",
+  "type": "module",
+  "bin": {
+    "coach": "dist/cli.js"
+  },
   "scripts": {
-    "dev": "next dev",
-    "build": "next build",
-    "start": "next start",
-    "lint": "eslint",
-    "migrate": "tsx scripts/migrate.ts",
-    "seed": "tsx scripts/seed.ts",
-    "queue": "tsx scripts/queue.ts",
-    "vapid": "tsx scripts/vapid.ts",
-    "icons": "tsx scripts/icons.ts",
-    "nudge": "tsx scripts/nudge.ts",
-    "test": "vitest run && node --test scripts/legacy/test/*.test.js"
+    "build": "tsc -p tsconfig.json",
+    "start": "node scripts/start.mjs",
+    "dev": "tsx watch src/server.ts",
+    "coach": "tsx src/cli.ts",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run"
   },
   "engines": {
-    "node": ">=20"
+    "node": ">=22"
   },
   "dependencies": {
-    "next": "16.3.3",
-    "pg": "^8.13.1",
-    "react": "19.2.8",
-    "react-dom": "19.2.8",
-    "web-push": "^3.6.7"
+    "@anthropic-ai/sdk": "^0.128.0",
+    "@hono/node-server": "^2.1.1",
+    "better-sqlite3": "^13.0.3",
+    "hono": "^4.13.9",
+    "yaml": "^2.9.1",
+    "zod": "^4.6.5"
   },
   "devDependencies": {
-    "@types/node": "^20",
-    "@types/pg": "^8.11.10",
-    "@types/react": "^19",
-    "@types/react-dom": "^19",
-    "@types/web-push": "^3.6.4",
-    "eslint": "^9",
-    "eslint-config-next": "16.3.3",
-    "tsx": "^4.19.2",
-    "typescript": "^5",
-    "vitest": "^2.1.8"
+    "@types/better-sqlite3": "^9.6.0",
+    "@types/node": "^26.6.3",
+    "tsx": "^4.23.15",
+    "typescript": "^7.0.2",
+    "vitest": "^5.0.2"
   }
 }
