@@ -32,5 +32,5 @@ real thing, so an honest report is worth more than a confident one.
   its own files, and Telegram messages to Anton.
 - Bind to 127.0.0.1 only. Never add GitHub Actions or anything under `.github/`.
 - Never log, store or print secrets; pass untrusted text through `src/lib/redact.ts`.
-- `legacy-port/` holds v3 code to port from (read it, do not import it). Phase 1 deletes it
-  once its logic is ported.
+- `legacy-port/` holds v3 code to port from (read it, never import it). The phase that ports
+  its last piece deletes it (plan: phase 5).
