@@ -10,6 +10,7 @@ collectors:
   hostinger: 10
   notes: 60
   sessions: 30
+  crm: 60
 ai:
   daily_usd_cap: 0.5
   model: claude-sonnet-5

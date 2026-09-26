@@ -16,6 +16,7 @@ import { addInbox } from './web/today.js';
 import { buildToday } from './today/service.js';
 import { setTaskStatus } from './tasks/store.js';
 import { alertSentence } from './alerts/index.js';
+import { suggestEarning } from './money/index.js';
 async function main() {
   const root = fileURLToPath(new URL('../',import.meta.url));
   const config = loadConfig(root), db = openDb(resolve(root,'data/coach.db'));
@@ -45,11 +46,23 @@ async function main() {
       if (!view.actions.length) log.info('No open tasks.');
       view.actions.forEach((a,i) => log.info(`${i + 1}. [${a.task.id}] ${a.task.title}
    ${a.project?.name ?? a.task.repo ?? 'no project'} · ${a.reason}`));
+    } else if (command === 'revenue' && arg === 'add') {
+      // coach revenue add PROJECT AMOUNT CURRENCY [none|monthly|yearly] [CLIENT…]
+      const [project, amountText, currencyText, maybeRecurring, ...rest] = process.argv.slice(4);
+      const amount = Number(amountText), currency = (currencyText ?? '').toUpperCase();
+      const recurring = ['none','monthly','yearly'].includes(maybeRecurring ?? '') ? maybeRecurring : 'none';
+      const client = (['none','monthly','yearly'].includes(maybeRecurring ?? '') ? rest : [maybeRecurring, ...rest]).filter(Boolean).join(' ') || null;
+      if (!project || !Number.isFinite(amount) || amount < 0 || !['PYG','SEK','USD','EUR'].includes(currency)) throw new Error('Usage: coach revenue add PROJECT AMOUNT PYG|SEK|USD|EUR [none|monthly|yearly] [CLIENT]');
+      if (!db.prepare('SELECT 1 FROM projects WHERE id=?').get(project)) throw new Error(`Unknown project ${project} (use the id from portfolio.yaml)`);
+      const now = new Date(), date = new Intl.DateTimeFormat('en-CA',{timeZone:config.owner_tz}).format(now);
+      db.prepare('INSERT INTO revenue(project_id,client,amount,currency,recurring,date,created_at) VALUES (?,?,?,?,?,?,?)').run(project,client,amount,currency,recurring,date,now.toISOString());
+      const suggested = suggestEarning(db,project,now);
+      log.info(`Recorded ${amount} ${currency} for ${project}${suggested ? ` (stage suggestion: ${suggested})` : ''}.`);
     } else if (command === 'task' && (arg === 'done' || arg === 'drop')) {
       const id = Number(process.argv[4]);
       if (!Number.isInteger(id) || !setTaskStatus(db,id,arg === 'done' ? 'done' : 'dropped',new Date())) throw new Error('Usage: coach task done|drop ID (see coach today)');
       log.info(`Task ${id} marked ${arg === 'done' ? 'done' : 'dropped'}.`);
-    } else throw new Error('Usage: coach portfolio generate | coach collect NAME|all | coach status | coach add TEXT | coach today | coach task done|drop ID');
+    } else throw new Error('Usage: coach portfolio generate | coach collect NAME|all | coach status | coach add TEXT | coach today | coach task done|drop ID | coach revenue add PROJECT AMOUNT CURRENCY [recurring] [CLIENT]');
   } finally { db.close(); }
 }
 main().catch(error => { log.error(String(error)); process.exitCode = 1; });

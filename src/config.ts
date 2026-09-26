@@ -11,7 +11,7 @@ export const configSchema = z.object({
   collectors: z.object({
     github: z.number().positive(), local: z.number().positive(),
     domains: z.number().positive().default(30), hostinger: z.number().positive().default(10),
-    notes: z.number().positive().default(60), sessions: z.number().positive().default(30),
+    notes: z.number().positive().default(60), sessions: z.number().positive().default(30), crm: z.number().positive().default(60),
   }),
   ai: z.object({
     daily_usd_cap: z.number().nonnegative(), model: z.string(),
