@@ -1,21 +1,25 @@
 # Handoff — coachme v4 (2026-09-26)
 
-Merged to main: plan (#23), phase 1 (#24), phase 2 (#25), phase 3 (#26), phase 4 (#27). 114 tests green.
+Merged to main: plan (#23), phase 1 (#24), phase 2 (#25), phase 3 (#26), phase 4 (#27).
+Phase 5 is on branch `claude/stoic-lamport-zcw3kp` (not merged). 127 tests green, build green.
+
+## Phase 5 (Rhythm): done in code, owner checks left
+- [x] Own Telegram bot, long polling (`src/notify/telegram.ts`, `bot.ts`): HTML escaping, 4000-char split, `ok` checked, token never in errors. Only `TELEGRAM_CHAT_ID` is answered; plain text → inbox, `/today`, `/idea …`. Update offset stored in `kv`.
+- [x] Daily push at `notify.daily_at` (08:00), skipped on an empty day; red alert pushed once on open and once on close (`alerts.notified_at`, new `closed_notified_at`). `src/notify/rules.ts`, `rhythm.ts` (runs every minute from `src/server.ts`).
+- [x] Weekly review Sunday 18:00 (`src/review/weekly.ts`): shipped (deploys, stage raises from the new `stage_changes` table, tasks done), broke, earned (revenue, leads), stalled ≥14 d, suggested kills. Stored in `reviews`, shown on `/review` with Pause/Kill, sent to Telegram. Catches up once if the PC was off, not more than 3 days late. `coach review [--send]`, `coach push`.
+- [x] Idea gate on `/ideas/:id/promote`: both answers required and stored; the named project is paused and the idea becomes a `planned` project in one yaml write.
+- [x] `scripts/register-task.ps1`, `scripts/unregister-task.ps1`.
+- [x] `legacy-port/` deleted.
+- [ ] Not verifiable in the cloud sandbox (api.telegram.org blocked, no Windows): Anton sets the bot env values, runs `coach review --send` and `coach push`, and checks a real message arrives; runs `register-task.ps1`, logs off and on, and checks http://127.0.0.1:4000 is up. The .ps1 scripts were not executed anywhere yet.
+- Note: on first start with Telegram set, every red alert that is open at that moment is pushed once.
 
 ## Next
-- [ ] Phase 5 (Rhythm), branch `v4/phase-5-rhythm`, PLAN.md §8 and §10:
-  - Telegram bot with long polling: its **own** bot, not the aiinsights one, which uses a webhook. Copy the approach of aiinsights `src/lib/telegram.ts` (4000-char cut, HTML escaping, checking the `ok` field).
-  - Accept only messages from `TELEGRAM_CHAT_ID`. Plain text goes to the inbox; `/today` and `/idea` also work.
-  - Daily push at 08:00 Asunción (red alerts plus the 3 actions; skipped when there's nothing). Alert pushed once when it opens and once when it closes (`alerts.notified_at`).
-  - Weekly review, Sunday 18:00: shipped, broke, earned, stalled >14 days, suggested kills. Stored and shown on `/review`, sent to Telegram (`src/ai/purposes.ts` writeWeekly already exists).
-  - Idea gate on `/ideas` promote: "more valuable than which live project" plus "what gets paused". Pauses the named project.
-  - `scripts/register-task.ps1` and `scripts/unregister-task.ps1` (at logon, run `npm start`).
-  - Delete `legacy-port/`.
 - [ ] Phase 6: Search Console OAuth (loopback), speed pass, backup script for `data/coach.db`, final README and KNOWN-ISSUES.
 
 ## Owner (Anton)
 - Make the repo private (then un-ignore `portfolio.yaml`).
 - Click "Accept all" on /portfolio (16 sites to live).
-- `.env.local`: ANTHROPIC_API_KEY, TELEGRAM_BOT_TOKEN + TELEGRAM_CHAT_ID, VENDERCRM_FEED_TOKENS.
+- `.env.local`: ANTHROPIC_API_KEY, TELEGRAM_BOT_TOKEN + TELEGRAM_CHAT_ID (new bot via @BotFather, steps in README), VENDERCRM_FEED_TOKENS.
 - Hostinger SSH keys (see README).
+- After phase 5 merges: delete the v3 Vercel project, its crons and the Neon DB (PLAN §12).
 - Found live: estudio.com.py and nombres.com.py return 503; propia.com.py has no DNS; asado.com.py and flyttatillparaguay.se get SERVFAIL.

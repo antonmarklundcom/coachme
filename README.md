@@ -22,6 +22,8 @@ The CLI is `scripts\coach.cmd` (or `node dist/cli.js`):
 | `coach task done 42` / `coach task drop 42` | Close a task |
 | `coach collect all` or `coach collect <name>` | Run collectors now: github, local, domains, hostinger, notes, sessions |
 | `coach status` | Collector freshness |
+| `coach review` / `coach review --send` | Write this week's review now (and send it to Telegram) |
+| `coach push` | Send today's message (red alerts plus the 3 actions) to Telegram now |
 | `coach portfolio generate` | First run creates `portfolio.yaml`; later runs only append new finds under `unassigned` |
 
 ## Where things live
@@ -46,6 +48,35 @@ $0.50) and caches every answer. Without a key, everything still works determinis
 
 Agent sessions are read from `%USERPROFILE%\.claude\projects` and `%USERPROFILE%\.codex\sessions`.
 Only the repo, timestamps, and a redacted, truncated last request and summary are stored.
+
+## Telegram and the weekly review
+
+coachme has its **own** Telegram bot (not the aiinsights one, which uses a webhook) and reads
+it by long polling, so nothing needs to reach this PC from outside.
+
+1. In Telegram, talk to @BotFather, `/newbot`, and copy the token.
+2. Send your new bot any message, then open
+   `https://api.telegram.org/bot<TOKEN>/getUpdates` in a browser and copy `message.chat.id`.
+3. Put both in `.env.local`: `TELEGRAM_BOT_TOKEN=…` and `TELEGRAM_CHAT_ID=…`, then restart.
+
+What it does (times in `config.yaml` under `notify`, owner timezone):
+- Plain text you send goes to the inbox; `/today` answers with red alerts and the 3 actions;
+  `/idea …` parks an idea. Messages from any other chat are ignored.
+- 08:00: red alerts plus the 3 actions. Nothing is sent on a day with neither.
+- A red alert is pushed once when it opens and once when it closes.
+- Sunday 18:00: the weekly review (shipped, broke, earned, stalled 14+ days, suggested kills),
+  stored on `/review` and sent. Without Telegram it is still written to `/review`.
+
+Promoting an idea on `/ideas` always asks which live project it beats and which project gets
+paused, and pauses that project in the same step.
+
+## Start at logon
+
+```
+powershell -ExecutionPolicy Bypass -File scripts\register-task.ps1     # npm start at every logon
+powershell -ExecutionPolicy Bypass -File scripts\unregister-task.ps1   # remove it
+```
+Output goes to `data\coachme.log`.
 
 ## Hostinger SSH setup
 

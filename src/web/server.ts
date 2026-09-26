@@ -18,6 +18,7 @@ import { alertSentence, evaluate } from '../alerts/index.js';
 import { activeStages } from '../portfolio/schema.js';
 import { registerTodayRoutes, ProjectWork, projectWork } from './today.js';
 import { registerMoneyRoutes } from './money.js';
+import { registerRhythmRoutes } from './review.js';
 import { leadsSignal } from '../money/index.js';
 import type { AiDeps, MessagesLike } from '../ai/client.js';
 import { log } from '../lib/log.js';
@@ -33,6 +34,13 @@ export function createApp({ db, config, collectors, portfolioPath, now = () => n
     projects: () => db.prepare("SELECT id, name FROM projects WHERE stage <> 'killed' ORDER BY name").all() as { id: string; name: string }[] });
   registerMoneyRoutes(app, { db, render, now, timeZone: config.owner_tz,
     projects: () => db.prepare("SELECT id, name FROM projects WHERE stage <> 'killed' ORDER BY name").all() as { id: string; name: string }[] });
+  // Every yaml write goes through here: validated by the caller, written atomically, then synced.
+  const writePortfolio = (text: string) => {
+    const parsed = loadPortfolio(text);
+    writeFileSync(`${portfolioPath}.tmp`,text); renameSync(`${portfolioPath}.tmp`,portfolioPath);
+    syncPortfolio(db,parsed,now().toISOString());
+  };
+  registerRhythmRoutes(app, { db, ai, timeZone: config.owner_tz, now, render, readPortfolio: () => readFileSync(portfolioPath,'utf8'), writePortfolio });
   app.get('/portfolio', c => c.html(render('Portfolio', jsx(Board, { projects: (db.prepare('SELECT * FROM projects ORDER BY name').all() as ProjectRow[]).map(p => ({...p,site:siteSignal(projectChecks(db,p.id),now()),leads:leadsSignal(db,p.id,now(),config.owner_tz)})), repos:repos(), local:local(), now:now(), all:c.req.query('all') === '1' }))));
   app.get('/project/:id', c => {
     const project = db.prepare('SELECT * FROM projects WHERE id=?').get(c.req.param('id')) as ProjectRow | undefined;
@@ -55,9 +63,7 @@ export function createApp({ db, config, collectors, portfolioPath, now = () => n
       text = setProjectStatus(text,id,target); accepted.push(id);
     }
     if (!accepted.length) return 0;
-    const parsed = loadPortfolio(text);
-    writeFileSync(`${portfolioPath}.tmp`,text); renameSync(`${portfolioPath}.tmp`,portfolioPath);
-    syncPortfolio(db,parsed,now().toISOString());
+    writePortfolio(text);
     const clear = db.prepare("UPDATE projects SET stage_suggestion=NULL,stage_evidence='[]' WHERE id=?");
     for (const id of accepted) clear.run(id);
     return accepted.length;
@@ -88,14 +94,11 @@ export function createApp({ db, config, collectors, portfolioPath, now = () => n
     if (action !== 'resume' && !reason.trim()) return c.text('A reason is required',400);
     try {
       const output = setProjectStatus(readFileSync(portfolioPath,'utf8'),c.req.param('id'),action === 'pause' ? 'paused' : action === 'kill' ? 'killed' : 'resume',reason);
-      const parsed = loadPortfolio(output);
-      writeFileSync(`${portfolioPath}.tmp`,output); renameSync(`${portfolioPath}.tmp`,portfolioPath);
-      syncPortfolio(db,parsed,now().toISOString());
+      writePortfolio(output);
       return c.redirect('/portfolio',303);
     } catch (error) { return c.text(redact(error instanceof Error ? error.message : 'Status update failed'),400); }
   });
   app.get('/health', c => c.json({collectors:freshness(db,collectors,now())}));
-  for (const [name,phase] of [['review',5]] as const) app.get(`/${name}`,c => c.html(render(name,jsx('p',{},`Coming in phase ${phase}.`))));
   app.onError((_error,c) => c.text('Unable to render this page',500));
   return app;
 }

@@ -2,7 +2,7 @@ import type { TaskRow } from '../tasks/store.js';
 import { DEFAULT_CLOSENESS, DEFAULT_EFFORT } from '../tasks/store.js';
 
 /**
- * Closeness to money by stage. Ported from v3's money-distance ranking (legacy-port/score.ts):
+ * Closeness to money by stage. Ported from v3's money-distance ranking (v3 lib/score.ts, in git history):
  * a project's stage says how near it is to earning; inside one stage, how close the task is
  * to done decides.
  */

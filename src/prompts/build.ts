@@ -3,7 +3,7 @@ import type { TaskRow } from '../tasks/store.js';
 /**
  * The copy-prompt: a ready-to-paste Claude Code / Codex prompt for one task. The header and
  * the definition of done are always deterministic (ported from v3's mandatory header in
- * legacy-port/generate/prompt.ts); only the goal paragraph may be polished by the AI.
+ * v3 lib/generate/prompt.ts, in git history); only the goal paragraph may be polished by the AI.
  */
 export interface PromptInput {
   task: Pick<TaskRow, 'title' | 'source_kind' | 'source_file' | 'source_line' | 'detail' | 'repo' | 'local_path'>;
