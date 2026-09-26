@@ -5,10 +5,12 @@ import type { AiDeps } from '../ai/client.js';
 import { buildToday, type TodayDeps } from '../today/service.js';
 import { generateReview, type StoredReview } from '../review/weekly.js';
 import { dailyDue, getKv, openRedSentences, pushAlerts, reviewMessage, setKv, todayMessage, weeklyDue, type Send } from './rules.js';
-import { addDays } from '../lib/clock.js';
+import { addDays, localDate } from '../lib/clock.js';
+import { backupDb } from '../lib/backup.js';
+import { compact } from '../db/compact.js';
 
 export interface NotifyConfig { daily_at: string; weekly_weekday: number; weekly_at: string }
-export interface RhythmDeps { db: DB; ai: AiDeps; today: TodayDeps; timeZone: string; notify: NotifyConfig; now: () => Date; log: Logger; send: Send | null; reviewUrl?: string }
+export interface RhythmDeps { db: DB; ai: AiDeps; today: TodayDeps; timeZone: string; notify: NotifyConfig; now: () => Date; log: Logger; send: Send | null; reviewUrl?: string; backupDir?: string }
 
 /** Red alerts plus the day's 3 actions as a Telegram message, or null on an empty day. */
 export async function todayText(deps: Pick<RhythmDeps, 'db' | 'today' | 'now'>, title = 'Today'): Promise<string | null> {
@@ -39,6 +41,15 @@ export async function rhythmTick(deps: RhythmDeps) {
     const text = await todayText(deps);
     if (text) await send(text); // an empty day is skipped: silence is a valid outcome
     setKv(db, 'daily_push', day, now);
+  });
+  // Daily database backup to data/backups (kept 14 days), then thinning of old snapshots,
+  // on the first tick of each local day. The backup runs first so nothing is lost unseen.
+  if (deps.backupDir) await step('backup', async () => {
+    const day = localDate(now, deps.timeZone);
+    if (getKv(db, 'backup_day') === day) return;
+    await backupDb(db, deps.backupDir!, now, deps.timeZone);
+    compact(db, now);
+    setKv(db, 'backup_day', day, now);
   });
   await step('weekly', async () => {
     const week = weeklyDue(now, deps.timeZone, deps.notify.weekly_weekday, deps.notify.weekly_at);

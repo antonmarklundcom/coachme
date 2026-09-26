@@ -1,0 +1,5 @@
+{"siteEntry":[
+ {"siteUrl":"sc-domain:propia.com.py","permissionLevel":"siteOwner"},
+ {"siteUrl":"https://www.example.se/","permissionLevel":"siteFullUser"},
+ {"siteUrl":"sc-domain:unverified.com","permissionLevel":"siteUnverifiedUser"}
+]}

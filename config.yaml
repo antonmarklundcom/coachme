@@ -11,6 +11,7 @@ collectors:
   notes: 60
   sessions: 30
   crm: 60
+  gsc: 1440
 # Telegram rhythm, owner timezone: daily push, and the weekly review (0 = Sunday)
 notify:
   daily_at: '08:00'
