@@ -17,3 +17,6 @@ portfolio.generated.yaml
 
 # screenshots
 docs/screenshots/
+
+# the business map stays local while the repo is public; commit it once the repo is private
+portfolio.yaml
