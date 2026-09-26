@@ -17,6 +17,8 @@ import { DomainDetails, projectChecks, siteSignal } from './domains.js';
 import { alertSentence, evaluate } from '../alerts/index.js';
 import { activeStages } from '../portfolio/schema.js';
 import { registerTodayRoutes, ProjectWork, projectWork } from './today.js';
+import { registerMoneyRoutes } from './money.js';
+import { leadsSignal } from '../money/index.js';
 import type { AiDeps, MessagesLike } from '../ai/client.js';
 import { log } from '../lib/log.js';
 export interface WebOptions { db: DB; config: Config; collectors: Pick<Collector,'name'|'intervalMin'>[]; portfolioPath: string; now?: () => Date; aiClient?: MessagesLike | null }
@@ -29,7 +31,9 @@ export function createApp({ db, config, collectors, portfolioPath, now = () => n
   const ai: AiDeps = { db, config: config.ai, timeZone: config.owner_tz, now, log, client: aiClient };
   registerTodayRoutes(app, { db, ai, githubOwner: config.github_owner, timeZone: config.owner_tz, now, render,
     projects: () => db.prepare("SELECT id, name FROM projects WHERE stage <> 'killed' ORDER BY name").all() as { id: string; name: string }[] });
-  app.get('/portfolio', c => c.html(render('Portfolio', jsx(Board, { projects: (db.prepare('SELECT * FROM projects ORDER BY name').all() as ProjectRow[]).map(p => ({...p,site:siteSignal(projectChecks(db,p.id),now())})), repos:repos(), local:local(), now:now(), all:c.req.query('all') === '1' }))));
+  registerMoneyRoutes(app, { db, render, now, timeZone: config.owner_tz,
+    projects: () => db.prepare("SELECT id, name FROM projects WHERE stage <> 'killed' ORDER BY name").all() as { id: string; name: string }[] });
+  app.get('/portfolio', c => c.html(render('Portfolio', jsx(Board, { projects: (db.prepare('SELECT * FROM projects ORDER BY name').all() as ProjectRow[]).map(p => ({...p,site:siteSignal(projectChecks(db,p.id),now()),leads:leadsSignal(db,p.id,now(),config.owner_tz)})), repos:repos(), local:local(), now:now(), all:c.req.query('all') === '1' }))));
   app.get('/project/:id', c => {
     const project = db.prepare('SELECT * FROM projects WHERE id=?').get(c.req.param('id')) as ProjectRow | undefined;
     if (!project) return c.text('Project not found', 404);
@@ -91,7 +95,7 @@ export function createApp({ db, config, collectors, portfolioPath, now = () => n
     } catch (error) { return c.text(redact(error instanceof Error ? error.message : 'Status update failed'),400); }
   });
   app.get('/health', c => c.json({collectors:freshness(db,collectors,now())}));
-  for (const [name,phase] of [['goals',4],['review',5]] as const) app.get(`/${name}`,c => c.html(render(name,jsx('p',{},`Coming in phase ${phase}.`))));
+  for (const [name,phase] of [['review',5]] as const) app.get(`/${name}`,c => c.html(render(name,jsx('p',{},`Coming in phase ${phase}.`))));
   app.onError((_error,c) => c.text('Unable to render this page',500));
   return app;
 }
