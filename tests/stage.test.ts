@@ -6,12 +6,14 @@ it('raises on evidence by at most one rung and never lowers automatically',() =>
   expect(proposeStage('building',{},now)).toBeNull();
   expect(proposeStage('building',{status:200},now)?.stage).toBe('deployed');
   expect(proposeStage('deployed',{status:200,in_yaml:true,confidence:'high',title:'Propia homes'},now)?.stage).toBe('live');
-  expect(proposeStage('deployed',{status:200,in_yaml:true,confidence:'medium',title:'Propia'},now)).toBeNull();
+  expect(proposeStage('deployed',{status:200,in_yaml:true,confidence:'medium',title:'Propia'},now)?.stage).toBe('live');
+  expect(proposeStage('deployed',{status:200,in_yaml:true,confidence:'low',title:'Propia'},now)).toBeNull();
+  expect(proposeStage('building',{status:200,in_yaml:true,confidence:'high',title:'Propia homes'},now)?.stage).toBe('live');
   expect(proposeStage('deployed',{status:200,in_yaml:true,confidence:'high',title:'Hostinger parking'},now)).toBeNull();
   expect(proposeStage('live',{status:503},now)).toBeNull();
   expect(proposeStage('live',{revenue_dates:['2026-09-01']},now)?.stage).toBe('earning');
   expect(proposeStage('live',{revenue_dates:['2025-01-01','2027-01-01']},now)).toBeNull();
-  expect(proposeStage('planned',{revenue_dates:['2026-09-01']},now)?.stage).toBe('building');
+  expect(proposeStage('planned',{revenue_dates:['2026-09-01']},now)?.stage).toBe('earning');
   expect(proposeStage('paused',{status:200},now)).toBeNull(); expect(proposeStage('killed',{status:200},now)).toBeNull();
   expect(proposeStage('earning',{status:200},now,'idea')?.stage).toBe('idea');
 });

@@ -75,3 +75,15 @@ it('passes only the validated config host to listen',() => {
 it('parses environment values without logging them',() => {
   expect(parseEnv('# comment\nNAME="fixture value"\nBLANK=\nOTHER=plain # comment')).toEqual({NAME:'fixture value',BLANK:'',OTHER:'plain'});
 });
+it('accepts every upward stage suggestion from the board in one yaml write and keeps comments',async () => {
+  const {app,db,portfolioPath} = setup();
+  db.prepare("UPDATE projects SET stage_suggestion='live',stage_evidence='[]' WHERE id='propia'").run();
+  const board = await (await app.request('/portfolio')).text();
+  expect(board).toContain('Evidence suggests a new stage for 1 project');
+  expect((await app.request('/portfolio/accept-stages',{method:'POST'})).status).toBe(303);
+  const yaml = readFileSync(portfolioPath,'utf8');
+  expect(loadPortfolio(yaml).projects.find(p => p.id === 'propia')?.stage).toBe('live');
+  expect(yaml).toContain('# Keep this comment');
+  expect(db.prepare("SELECT stage,stage_suggestion FROM projects WHERE id='propia'").get()).toEqual({stage:'live',stage_suggestion:null});
+  expect(await (await app.request('/project/propia')).text()).toContain('Open PRs (');
+});

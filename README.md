@@ -22,3 +22,6 @@ unassigned in portfolio.yaml. Local-only checkouts appear under local_only.
 History lives in data/coach.db. Pause/kill require a reason; resume restores stage.
 
 The v1-v3 record is in [docs/history](docs/history/).
+# Hostinger SSH setup
+
+Enable SSH in hPanel and keep the private key in `~/.ssh`. Add an optional `ssh` block to the account in `portfolio.yaml`: `ssh: { host: server.example.com, port: 65002, user: account_user, key: ~/.ssh/hostinger_a }`. Use your account's host, port and user; never put a password or key contents in YAML. The collector reads process counts every 10 minutes. Without SSH, enter the hPanel process count on `/hosting`.

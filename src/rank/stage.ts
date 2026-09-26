@@ -6,12 +6,14 @@ export function proposeStage(current: Stage, evidence: StageEvidence, now: Date,
   let target: typeof activeStages[number] | undefined, reason = '';
   if (evidence.status && evidence.status >= 200 && evidence.status < 300) {
     target = 'deployed'; reason = 'Domain answers 2xx';
-    if (evidence.in_yaml && evidence.confidence === 'high' && evidence.title?.trim() && !/hostinger|parking|parked|coming soon|default page|welcome to nginx/i.test(evidence.title)) {
-      target = 'live'; reason = 'Confirmed domain answers 2xx with a real title';
+    if (evidence.in_yaml && (evidence.confidence === 'high' || evidence.confidence === 'medium') && evidence.title?.trim() && !/hostinger|parking|parked|coming soon|default page|welcome to nginx/i.test(evidence.title)) {
+      target = 'live'; reason = 'Attached domain answers 2xx with a real title';
     }
   }
   if (evidence.revenue_dates?.some(d => { const age = now.getTime() - Date.parse(d); return age >= 0 && age <= 60 * 86_400_000; })) { target = 'earning'; reason = 'Revenue in the last 60 days'; }
   if (!target || activeStages.indexOf(target) <= activeStages.indexOf(current)) return null;
-  const next = activeStages[activeStages.indexOf(current) + 1];
-  return { stage: next, evidence: next === target ? reason : `${reason} (capped at one stage per run)` };
+  // A suggestion only takes effect when Anton accepts it, so it names the stage the
+  // evidence supports instead of climbing one rung per run (the v3 rule was for
+  // automatic raises, which v4 never does).
+  return { stage: target, evidence: reason };
 }

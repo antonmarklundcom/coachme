@@ -6,6 +6,8 @@ github_owner: antonmarklundcom
 collectors:
   github: 30
   local: 15
+  domains: 30
+  hostinger: 10
 ai:
   daily_usd_cap: 0.5
   model: claude-sonnet-5

@@ -1,0 +1,8 @@
+P 172
+T 192
+  301 32 node /home/user/domains/shop.test/public_html/server.js
+  302 12 node /home/user/domains/blog.test/public_html/node_modules/.bin/next build
+CWD 301 /home/user/domains/shop.test/public_html
+CWD 302 /home/user/domains/blog.test/public_html
+D shop.test
+D blog.test
