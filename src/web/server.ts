@@ -6,7 +6,7 @@ import type { DB } from '../db/index.js';
 import { configSchema, type Config } from '../config.js';
 import type { Collector } from '../collectors/types.js';
 import { freshness } from '../collectors/freshness.js';
-import { Layout, FreshnessTable } from './layout.js';
+import { Layout } from './layout.js';
 import { Board, Dot, RepoPanel, StatusForms, type ProjectRow, type RepoRow, type LocalRow } from './views.js';
 import { setProjectStatus } from '../portfolio/patch.js';
 import { loadPortfolio } from '../portfolio/load.js';
@@ -16,18 +16,19 @@ import { Hosting } from './hosting.js';
 import { DomainDetails, projectChecks, siteSignal } from './domains.js';
 import { alertSentence, evaluate } from '../alerts/index.js';
 import { activeStages } from '../portfolio/schema.js';
-export interface WebOptions { db: DB; config: Config; collectors: Pick<Collector,'name'|'intervalMin'>[]; portfolioPath: string; now?: () => Date }
-export function createApp({ db, config, collectors, portfolioPath, now = () => new Date() }: WebOptions) {
+import { registerTodayRoutes, ProjectWork, projectWork } from './today.js';
+import type { AiDeps, MessagesLike } from '../ai/client.js';
+import { log } from '../lib/log.js';
+export interface WebOptions { db: DB; config: Config; collectors: Pick<Collector,'name'|'intervalMin'>[]; portfolioPath: string; now?: () => Date; aiClient?: MessagesLike | null }
+export function createApp({ db, config, collectors, portfolioPath, now = () => new Date(), aiClient }: WebOptions) {
   configSchema.parse(config);
   const app = new Hono();
   const render = (title: string, child: unknown) => jsx(Layout, { title, redCount: (db.prepare("SELECT count(*) AS n FROM alerts WHERE severity='red' AND closed_at IS NULL").get() as {n:number}).n, freshness: freshness(db, collectors, now()), timeZone: config.owner_tz, children: child }).toString();
   const repos = () => db.prepare(`SELECT r.*,s.default_ci,s.last_commit_at,s.last_push_at,s.open_prs,s.stale_branches FROM repos r LEFT JOIN latest_gh_snapshot s ON s.repo=r.name`).all() as (RepoRow & {project_id:string})[];
   const local = () => db.prepare('SELECT * FROM latest_local_snapshot').all() as LocalRow[];
-  app.get('/', c => {
-    const alerts = db.prepare("SELECT * FROM alerts WHERE closed_at IS NULL ORDER BY opened_at DESC").all() as {kind:string;subject:string;severity:string}[];
-    const red = alerts.filter(a => a.severity === 'red'), amber = alerts.filter(a => a.severity === 'amber');
-    return c.html(render('Today', jsx('div', {}, jsx('h2', {}, 'Open red alerts'), red.length ? jsx('ul', {}, ...red.map(a => jsx('li', {}, alertSentence(db,a,now())))) : jsx('p', {}, 'No open red alerts.'), jsx('details',{},jsx('summary',{},`${amber.length} amber alerts`),jsx('ul',{},...amber.map(a => jsx('li',{},alertSentence(db,a,now()))))), jsx('p', {}, 'Ranked actions arrive in phase 3.'))));
-  });
+  const ai: AiDeps = { db, config: config.ai, timeZone: config.owner_tz, now, log, client: aiClient };
+  registerTodayRoutes(app, { db, ai, githubOwner: config.github_owner, timeZone: config.owner_tz, now, render,
+    projects: () => db.prepare("SELECT id, name FROM projects WHERE stage <> 'killed' ORDER BY name").all() as { id: string; name: string }[] });
   app.get('/portfolio', c => c.html(render('Portfolio', jsx(Board, { projects: (db.prepare('SELECT * FROM projects ORDER BY name').all() as ProjectRow[]).map(p => ({...p,site:siteSignal(projectChecks(db,p.id),now())})), repos:repos(), local:local(), now:now(), all:c.req.query('all') === '1' }))));
   app.get('/project/:id', c => {
     const project = db.prepare('SELECT * FROM projects WHERE id=?').get(c.req.param('id')) as ProjectRow | undefined;
@@ -36,7 +37,7 @@ export function createApp({ db, config, collectors, portfolioPath, now = () => n
     const checks = projectChecks(db,project.id), site = siteSignal(checks,now());
     return c.html(render(project.name, jsx('div', {}, jsx('p', {}, `Stage: ${project.stage}`), jsx('p', {}, project.notes), jsx(StatusForms, {project}),
       ...projectRepos.map(r => jsx(RepoPanel, {repo:r, local:local().filter(l => l.repo === r.name), now:now()})),
-      jsx(Dot,{state:site.state,label:'Site',title:site.sentence}), jsx('h2', {}, 'Domains'), jsx(DomainDetails,{checks,now:now()}), project.stage_suggestion ? jsx('form',{method:'post',action:`/project/${encodeURIComponent(project.id)}/accept-stage`},jsx('p',{},`Evidence says ${project.stage_suggestion}: ${(JSON.parse(project.stage_evidence ?? '[]') as {host?:string;reason?:string}[]).map(e => `${e.host ?? ''}: ${e.reason ?? ''}`).join('; ')}`),jsx('button',{},'Accept?')) : null)));
+      jsx(ProjectWork, projectWork(db, project.id)), jsx(Dot,{state:site.state,label:'Site',title:site.sentence}), jsx('h2', {}, 'Domains'), jsx(DomainDetails,{checks,now:now()}), project.stage_suggestion ? jsx('form',{method:'post',action:`/project/${encodeURIComponent(project.id)}/accept-stage`},jsx('p',{},`Evidence says ${project.stage_suggestion}: ${(JSON.parse(project.stage_evidence ?? '[]') as {host?:string;reason?:string}[]).map(e => `${e.host ?? ''}: ${e.reason ?? ''}`).join('; ')}`),jsx('button',{},'Accept?')) : null)));
   });
   // Writes every accepted upward suggestion to portfolio.yaml in one pass. Returns how many were applied.
   const acceptStages = (ids: string[]) => {
@@ -90,7 +91,7 @@ export function createApp({ db, config, collectors, portfolioPath, now = () => n
     } catch (error) { return c.text(redact(error instanceof Error ? error.message : 'Status update failed'),400); }
   });
   app.get('/health', c => c.json({collectors:freshness(db,collectors,now())}));
-  for (const [name,phase] of [['inbox',3],['ideas',5],['goals',4],['review',5]] as const) app.get(`/${name}`,c => c.html(render(name,jsx('p',{},`Coming in phase ${phase}.`))));
+  for (const [name,phase] of [['goals',4],['review',5]] as const) app.get(`/${name}`,c => c.html(render(name,jsx('p',{},`Coming in phase ${phase}.`))));
   app.onError((_error,c) => c.text('Unable to render this page',500));
   return app;
 }

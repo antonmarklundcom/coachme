@@ -8,6 +8,11 @@ collectors:
   local: 15
   domains: 30
   hostinger: 10
+  notes: 60
+  sessions: 30
 ai:
   daily_usd_cap: 0.5
   model: claude-sonnet-5
+  # USD per million tokens, used to enforce daily_usd_cap
+  prices:
+    claude-sonnet-5: { input: 2, output: 10 }

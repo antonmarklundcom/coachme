@@ -40,5 +40,5 @@ it('runs the optional hook only after a recorded success, keeping runner semanti
   expect(await runCollector({name:'domains',intervalMin:30,run:async () => 2,afterSuccess:hook},ctx)).toBe(true); expect(hook).toHaveBeenCalledOnce();
   expect(await runCollector({name:'domains',intervalMin:30,run:async () => { throw new Error('offline'); },afterSuccess:hook},ctx)).toBe(false); expect(hook).toHaveBeenCalledOnce();
   expect(await runCollector({name:'domains',intervalMin:30,run:async () => 1,afterSuccess:() => { throw new Error('hook failed'); }},ctx)).toBe(true);
-  const registry = collectorRegistry(config); expect(registry.map(c => c.name)).toEqual(['github','local','domains','hostinger']); expect(registry.find(c => c.name === 'domains')?.intervalMin).toBe(30); expect(registry.find(c => c.name === 'hostinger')?.intervalMin).toBe(10); expect(registry.filter(c => c.afterSuccess).map(c => c.name)).toEqual(['domains','hostinger']);
+  const registry = collectorRegistry(config); expect(registry.map(c => c.name)).toEqual(['github','local','domains','hostinger','notes','sessions']); expect(registry.find(c => c.name === 'domains')?.intervalMin).toBe(30); expect(registry.find(c => c.name === 'hostinger')?.intervalMin).toBe(10); expect(registry.filter(c => c.afterSuccess).map(c => c.name)).toEqual(['local','domains','hostinger']);
 });
