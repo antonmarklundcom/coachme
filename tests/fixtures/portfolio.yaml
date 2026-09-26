@@ -1,0 +1,21 @@
+# Anton's hand-edited portfolio
+version: 1
+owner_tz: America/Asuncion
+limits: { hostinger_process_limit: 200 }
+hosting_accounts:
+  - id: hst-a
+    label: Primary host
+projects:
+  - id: propia
+    name: Propia # Keep this comment
+    stage: building # Owner decides
+    market: PY
+    kind: portal
+    money: { model: leadgen, weight: 4 }
+    repos: [propia.node, app.propia]
+    domains:
+      - { host: propia.com.py, hosting: hst-a, app: node, crm_site: propia }
+    notes: Keep the hand-edited notes.
+unassigned:
+  repos: [] # Move discoveries into projects
+  domains: []

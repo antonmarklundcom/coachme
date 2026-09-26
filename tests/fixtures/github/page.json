@@ -1,0 +1,12 @@
+{
+  "data":{"repositoryOwner":{"repositories":{"pageInfo":{"hasNextPage":false,"endCursor":null},"nodes":[
+    {"name":"propia.node","isArchived":false,"pushedAt":"2026-09-25T00:00:00Z","defaultBranchRef":{"name":"main","target":{"committedDate":"2026-09-25T00:00:00Z","statusCheckRollup":{"state":"SUCCESS"}}},
+     "pullRequests":{"nodes":[{"number":12,"title":"Finish the form","headRefName":"form","createdAt":"2026-09-20T00:00:00Z","isDraft":false,"commits":{"nodes":[{"commit":{"statusCheckRollup":{"state":"PENDING"}}}]}}]},
+     "merged":{"nodes":[{"number":11,"mergedAt":"2026-09-23T00:00:00Z","mergeCommit":{"oid":"fixture-commit"}}]},
+     "refs":{"nodes":[{"name":"main","target":{"committedDate":"2026-01-01T00:00:00Z"}},{"name":"old-feature","target":{"committedDate":"2026-08-01T00:00:00Z"}},{"name":"recent","target":{"committedDate":"2026-09-25T00:00:00Z"}}]}},
+    {"name":"red","defaultBranchRef":{"name":"main","target":{"statusCheckRollup":{"state":"FAILURE"}}}},
+    {"name":"pending","defaultBranchRef":{"name":"main","target":{"statusCheckRollup":{"state":"PENDING"}}}},
+    {"name":"none","defaultBranchRef":{"name":"main","target":{"statusCheckRollup":null}}},
+    {"name":"unknown","defaultBranchRef":{"name":"main","target":{"statusCheckRollup":{"state":"UNRECOGNIZED"}}}}
+  ]}}}
+}

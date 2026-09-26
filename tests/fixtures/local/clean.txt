@@ -1,0 +1,4 @@
+# branch.oid fixture
+# branch.head main
+# branch.upstream origin/main
+# branch.ab +0 -0

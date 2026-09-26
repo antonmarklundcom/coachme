@@ -1,0 +1,27 @@
+{
+  "now": "2026-09-26T12:00:00Z",
+  "repos": [
+    {"name":"propia.node","isArchived":false,"pushedAt":"2026-09-25T00:00:00Z"},
+    {"name":"app.propia","isArchived":false,"pushedAt":"2026-06-01T00:00:00Z"},
+    {"name":"embarazo","isArchived":false,"pushedAt":"2026-06-01T00:00:00Z"},
+    {"name":"embarazo.2.1","isArchived":false,"pushedAt":"2026-09-20T00:00:00Z"},
+    {"name":"ecom","isArchived":false,"pushedAt":"2026-06-01T00:00:00Z"},
+    {"name":"lenceria","isArchived":false,"pushedAt":"2026-06-01T00:00:00Z"},
+    {"name":"productos","isArchived":false,"pushedAt":"2026-06-01T00:00:00Z"},
+    {"name":"mascota","isArchived":false,"pushedAt":"2026-06-01T00:00:00Z"},
+    {"name":"archive","isArchived":true,"pushedAt":"2026-09-25T00:00:00Z"},
+    {"name":"infra","isArchived":false,"pushedAt":null},
+    {"name":"shared-one","isArchived":false,"pushedAt":null},
+    {"name":"shared-two","isArchived":false,"pushedAt":null}
+  ],
+  "local": [
+    {"path":"fixture/renamed-folder","name":"renamed-folder","repo":"propia.node","local_only":false,"branch":"main","ahead":2,"behind":1,"dirty_files":3,"unpushed_commits":2},
+    {"path":"fixture/offline","name":"offline","repo":null,"local_only":true,"branch":"main","ahead":0,"behind":0,"dirty_files":0,"unpushed_commits":0}
+  ],
+  "domains": [
+    {"repo":"propia.node","host":"propia.com.py","source":"CNAME","confidence":"high"},
+    {"repo":"shared-one","host":"shared.test","source":"CNAME","confidence":"high"},
+    {"repo":"shared-two","host":"shared.test","source":"homepageUrl","confidence":"high"}
+  ],
+  "hints": [{"name":"infra","tier":"infra"},{"name":"ecom","tier":"revenue","blocker":"db-setup"},{"name":"embarazo","tier":"experiment"}]
+}

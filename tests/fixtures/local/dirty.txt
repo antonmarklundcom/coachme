@@ -1,0 +1,9 @@
+# branch.oid fixture
+# branch.head work
+# branch.upstream origin/work
+# branch.ab +3 -2
+1 .M N... 100644 100644 100644 fixture fixture src/main.ts
+2 R. N... 100644 100644 100644 fixture fixture R100 new.txt	old.txt
+? untracked.txt
+u UU N... 100644 100644 100644 100644 fixture fixture fixture conflict.txt
+! ignored.txt

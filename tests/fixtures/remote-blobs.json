@@ -1,0 +1,19 @@
+{
+  "data": {
+    "r0": {
+      "f0": null,
+      "f1": {"text":"{\"homepage\":\"https://propia.com.py\"}"},
+      "f2": null,
+      "f3": null,
+      "f4": {"text":"# Propia\nVisit [Propia](https://propia.se). Dependencies: https://unrelated.test and https://github.com/example/project."},
+      "f5": null,
+      "f6": null,
+      "f7": null,
+      "f8": {"text":"export const site = { url: 'https://propia.com.py' };"},
+      "f9": null,
+      "f10": null,
+      "f11": {"text":"<?php define('BASE_URL', 'https://propia-app.test');"},
+      "f12": null
+    }
+  }
+}
