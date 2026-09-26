@@ -9,6 +9,9 @@ import { syncPortfolio } from './portfolio/sync.js';
 import { collectorRegistry } from './collectors/registry.js';
 import { createScheduler } from './collectors/scheduler.js';
 import { createApp, listen } from './web/server.js';
+import { createTelegram } from './notify/telegram.js';
+import { startBot } from './notify/bot.js';
+import { startRhythm, todayText } from './notify/rhythm.js';
 const config = loadConfig(), db = openDb();
 migrate(db);
 const portfolioPath = resolve('portfolio.yaml');
@@ -23,5 +26,17 @@ const collectors = collectorRegistry(config);
 const scheduler = createScheduler(collectors,{db,config,exec:run,now:() => new Date(),log});
 const server = listen(createApp({db,config,collectors,portfolioPath}),config);
 scheduler.start();
+// Telegram (PLAN.md §8): coachme's own bot, long polling, only Anton's chat. Without the two
+// env values the review is still written to /review and capture works in the UI and CLI.
+const now = () => new Date();
+const ai = { db, config: config.ai, timeZone: config.owner_tz, now, log };
+const today = { db, ai, githubOwner: config.github_owner, timeZone: config.owner_tz, now };
+const token = process.env.TELEGRAM_BOT_TOKEN, chatId = process.env.TELEGRAM_CHAT_ID;
+const telegram = token && chatId ? createTelegram(token) : null;
+const send = telegram && chatId ? (html: string) => telegram.send(chatId, html) : null;
+const reviewUrl = `http://${config.host}:${config.port}/review`;
+const rhythm = startRhythm({ db, ai, today, timeZone: config.owner_tz, notify: config.notify, now, log, send, reviewUrl });
+const bot = telegram && chatId ? startBot({ db, chatId, now, telegram, log, today: async () => (await todayText({ db, today, now })) ?? 'Nothing broken and no open tasks.' }) : null;
+log.info(telegram ? 'Telegram bot on (long polling)' : 'Telegram off: set TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID in .env.local');
 log.info(`coachme listening on http://${config.host}:${config.port}`);
-for (const signal of ['SIGINT','SIGTERM'] as const) process.on(signal,() => { scheduler.stop(); unwatchFile(portfolioPath); server.close(() => process.exit(0)); });
+for (const signal of ['SIGINT','SIGTERM'] as const) process.on(signal,() => { scheduler.stop(); rhythm.stop(); void bot?.stop(); unwatchFile(portfolioPath); server.close(() => process.exit(0)); });

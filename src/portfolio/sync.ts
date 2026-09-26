@@ -14,7 +14,12 @@ export function syncPortfolio(db: DB, p: Portfolio, at = new Date().toISOString(
       hosts.add(d.host);
       db.prepare(`INSERT INTO domains VALUES (?,?,?,?,?,?,?) ON CONFLICT(host) DO UPDATE SET project_id=excluded.project_id,hosting_account_id=excluded.hosting_account_id,app_kind=excluded.app_kind,crm_site=excluded.crm_site,source=excluded.source,confidence=excluded.confidence`).run(d.host, project, d.hosting ?? null, d.app ?? null, d.crm_site ?? null, d.source ?? null, d.confidence ?? null);
     };
+    const previous = db.prepare('SELECT stage FROM projects WHERE id=?');
+    const history = db.prepare('INSERT INTO stage_changes(project_id,from_stage,to_stage,at) VALUES (?,?,?,?)');
     for (const project of p.projects) {
+      // Stage history for the weekly review; a project's first appearance is not a change.
+      const before = previous.get(project.id) as { stage: string } | undefined;
+      if (before && before.stage !== project.stage) history.run(project.id, before.stage, project.stage, at);
       db.prepare(`INSERT INTO projects(id,name,stage,stage_before,status_note,market,kind,money_model,money_weight,notes,paused_at,killed_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)
         ON CONFLICT(id) DO UPDATE SET name=excluded.name,stage=excluded.stage,stage_before=excluded.stage_before,status_note=excluded.status_note,market=excluded.market,kind=excluded.kind,money_model=excluded.money_model,money_weight=excluded.money_weight,notes=excluded.notes,
         paused_at=CASE WHEN excluded.stage='paused' THEN coalesce(projects.paused_at,excluded.paused_at) ELSE NULL END,

@@ -13,6 +13,12 @@ export const configSchema = z.object({
     domains: z.number().positive().default(30), hostinger: z.number().positive().default(10),
     notes: z.number().positive().default(60), sessions: z.number().positive().default(30), crm: z.number().positive().default(60),
   }),
+  // Telegram rhythm (PLAN.md §8), owner timezone. weekly_weekday: 0 = Sunday.
+  notify: z.object({
+    daily_at: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/).default('08:00'),
+    weekly_weekday: z.number().int().min(0).max(6).default(0),
+    weekly_at: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/).default('18:00'),
+  }).default({ daily_at: '08:00', weekly_weekday: 0, weekly_at: '18:00' }),
   ai: z.object({
     daily_usd_cap: z.number().nonnegative(), model: z.string(),
     // USD per million tokens; used to enforce the daily cap
@@ -36,5 +42,5 @@ export function loadConfig(root = process.cwd()): Config {
   const envPath = resolve(root, '.env.local');
   if (existsSync(envPath)) for (const [key, value] of Object.entries(parseEnv(readFileSync(envPath, 'utf8')))) process.env[key] = value;
   try { return configSchema.parse(parse(readFileSync(resolve(root, 'config.yaml'), 'utf8'))); }
-  catch { throw new Error('Invalid config.yaml: host must be 127.0.0.1; check timezone, port and collector intervals'); }
+  catch { throw new Error('Invalid config.yaml: host must be 127.0.0.1; check timezone, port, collector intervals and notify times (HH:MM)'); }
 }

@@ -8,8 +8,8 @@ import { testDb } from './helpers.js';
 it('migrates every planned table once and enables foreign keys',() => {
   const db = testDb(); migrate(db);
   const names = (db.prepare("SELECT name FROM sqlite_master WHERE type='table'").all() as {name:string}[]).map(r => r.name);
-  for (const name of ['projects','repos','domains','hosting_accounts','collector_runs','gh_snapshots','deploys','local_snapshots','agent_sessions','domain_checks','process_samples','crm_leads_daily','gsc_weekly','revenue','fx','tasks','ideas','inbox','goals','alerts','ai_calls','ai_cache']) expect(names).toContain(name);
-  expect(db.pragma('foreign_keys',{simple:true})).toBe(1); expect(db.prepare('SELECT count(*) AS n FROM schema_migrations').get()).toEqual({n:4});
+  for (const name of ['projects','repos','domains','hosting_accounts','collector_runs','gh_snapshots','deploys','local_snapshots','agent_sessions','domain_checks','process_samples','crm_leads_daily','gsc_weekly','revenue','fx','tasks','ideas','inbox','goals','alerts','ai_calls','ai_cache','stage_changes','reviews','kv']) expect(names).toContain(name);
+  expect(db.pragma('foreign_keys',{simple:true})).toBe(1); expect(db.prepare('SELECT count(*) AS n FROM schema_migrations').get()).toEqual({n:5});
   expect(() => db.prepare("INSERT INTO gh_snapshots(repo,at,open_prs,default_ci,stale_branches) VALUES ('r','now','[]','invalid','[]')").run()).toThrow();
 });
 it('classification migration preserves existing rows, references and history',() => {

@@ -78,16 +78,6 @@ export function InboxPage({ items, projects }: { items: InboxRow[]; projects: { 
   </div>;
 }
 
-interface IdeaRow { id: number; text: string; created_at: string }
-export function IdeasPage({ ideas }: { ideas: IdeaRow[] }) {
-  return <div><Style />
-    <p>New ideas go here, not into new repos.</p>
-    <form method="post" action="/ideas"><textarea class="capture" name="text" required maxlength={2000} rows={2} /><p><button class="primary">Park idea</button></p></form>
-    <h2>Parked ({ideas.length})</h2>
-    <ul>{ideas.map(i => <li>{i.text} <span class="muted">{i.created_at.slice(0, 10)}</span></li>)}</ul>
-  </div>;
-}
-
 interface SessionRow { tool: string; last_at: string | null; last_request: string | null; ended_mid_task: number; summary: string | null; branch: string | null }
 export function ProjectWork({ tasks, sessions }: { tasks: TaskRow[]; sessions: SessionRow[] }) {
   return <section class="panel"><Style />
@@ -156,13 +146,6 @@ export function registerTodayRoutes(app: Hono, deps: TodayDeps & { render: Rende
       db.prepare('UPDATE inbox SET triaged_as=? WHERE id=?').run(as === 'drop' ? 'dropped' : as, id);
     })();
     return c.redirect('/inbox', 303);
-  });
-  app.get('/ideas', c => c.html(deps.render('Ideas', <IdeasPage ideas={db.prepare("SELECT id,text,created_at FROM ideas WHERE status='parked' ORDER BY created_at DESC").all() as IdeaRow[]} />)));
-  app.post('/ideas', async c => {
-    const t = text((await c.req.parseBody()).text, 2000);
-    if (!t) return c.text('Nothing to park', 400);
-    db.prepare("INSERT INTO ideas(text,created_at,status) VALUES (?,?,'parked')").run(t, deps.now().toISOString());
-    return c.redirect('/ideas', 303);
   });
 }
 

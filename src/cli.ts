@@ -17,6 +17,9 @@ import { buildToday } from './today/service.js';
 import { setTaskStatus } from './tasks/store.js';
 import { alertSentence } from './alerts/index.js';
 import { suggestEarning } from './money/index.js';
+import { generateReview, sections } from './review/weekly.js';
+import { createTelegram } from './notify/telegram.js';
+import { sendReview, todayText } from './notify/rhythm.js';
 async function main() {
   const root = fileURLToPath(new URL('../',import.meta.url));
   const config = loadConfig(root), db = openDb(resolve(root,'data/coach.db'));
@@ -62,7 +65,26 @@ async function main() {
       const id = Number(process.argv[4]);
       if (!Number.isInteger(id) || !setTaskStatus(db,id,arg === 'done' ? 'done' : 'dropped',new Date())) throw new Error('Usage: coach task done|drop ID (see coach today)');
       log.info(`Task ${id} marked ${arg === 'done' ? 'done' : 'dropped'}.`);
-    } else throw new Error('Usage: coach portfolio generate | coach collect NAME|all | coach status | coach add TEXT | coach today | coach task done|drop ID | coach revenue add PROJECT AMOUNT CURRENCY [recurring] [CLIENT]');
+    } else if (command === 'review') {
+      // coach review [--send]: write this week's review now; --send also sends it to Telegram.
+      const now = () => new Date(), ai = {db,config:config.ai,timeZone:config.owner_tz,now,log};
+      const review = await generateReview(db,ai,now(),config.owner_tz);
+      log.info(review.headline);
+      for (const s of sections(JSON.parse(review.facts))) log.info(`${s.title}: ${s.lines.length ? `\n  ${s.lines.join('\n  ')}` : 'none'}`);
+      if (process.argv.includes('--send')) { const send = telegramSend(); await sendReview(db,send,review,now(),`http://${config.host}:${config.port}/review`); log.info('Sent to Telegram.'); }
+    } else if (command === 'push') {
+      // coach push: send today's message to Telegram now (red alerts plus the 3 actions).
+      const now = () => new Date(), ai = {db,config:config.ai,timeZone:config.owner_tz,now,log};
+      const text = await todayText({db,now,today:{db,ai,githubOwner:config.github_owner,timeZone:config.owner_tz,now}});
+      if (!text) log.info('Nothing to send: no red alerts and no open tasks.');
+      else { await telegramSend()(text); log.info('Sent to Telegram.'); }
+    } else throw new Error('Usage: coach portfolio generate | coach collect NAME|all | coach status | coach add TEXT | coach today | coach task done|drop ID | coach revenue add PROJECT AMOUNT CURRENCY [recurring] [CLIENT] | coach review [--send] | coach push');
   } finally { db.close(); }
+}
+function telegramSend() {
+  const token = process.env.TELEGRAM_BOT_TOKEN, chatId = process.env.TELEGRAM_CHAT_ID;
+  if (!token || !chatId) throw new Error('Set TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID in .env.local');
+  const telegram = createTelegram(token);
+  return (html: string) => telegram.send(chatId,html);
 }
 main().catch(error => { log.error(String(error)); process.exitCode = 1; });
