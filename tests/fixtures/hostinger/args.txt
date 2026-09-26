@@ -1,0 +1,8 @@
+P 42
+T 68
+  401 8 /usr/bin/node /home/user/domains/shop.test/public_html/server.js
+  402 10 node /home/user/domains/blog.test/public_html/node_modules/next/dist/bin/next start
+CWD 401
+CWD 402
+D shop.test
+D blog.test

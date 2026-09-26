@@ -1,0 +1,8 @@
+[
+  {"name":"200","raw":{"host":"site.test","at":"2026-09-26T12:00:00.000Z","dns_ok":true,"status":200,"final_url":"https://site.test/","redirects":0,"ms":25,"html":"<title>A real shop</title><form><input type='email'></form>","has_robots":true,"has_sitemap":true},"error":null,"lead":1},
+  {"name":"301 chain","raw":{"host":"site.test","at":"2026-09-26T12:00:00.000Z","dns_ok":true,"status":200,"final_url":"https://www.site.test/shop","redirects":2,"ms":60,"html":"<title>A real shop</title>"},"error":null,"lead":0},
+  {"name":"503","raw":{"host":"site.test","at":"2026-09-26T12:00:00.000Z","dns_ok":true,"status":503,"redirects":0,"ms":25},"error":"HTTP_5XX","lead":0},
+  {"name":"ENOTFOUND","raw":{"host":"site.test","at":"2026-09-26T12:00:00.000Z","dns_ok":false,"redirects":0,"ms":25,"error_kind":"ENOTFOUND"},"error":"ENOTFOUND","lead":0},
+  {"name":"expired cert","raw":{"host":"site.test","at":"2026-09-26T12:00:00.000Z","dns_ok":true,"redirects":0,"ms":25,"error_kind":"CERT_HAS_EXPIRED"},"error":"CERT_HAS_EXPIRED","lead":0},
+  {"name":"placeholder","raw":{"host":"site.test","at":"2026-09-26T12:00:00.000Z","dns_ok":true,"status":200,"redirects":0,"ms":25,"html":"<title>Welcome</title><p>Hostinger default page</p>"},"error":"PLACEHOLDER","lead":0}
+]

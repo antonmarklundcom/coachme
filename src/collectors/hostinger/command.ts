@@ -1,0 +1,1 @@
+export const COMMAND = 'echo "P $(ps -u $USER --no-headers | wc -l)"; echo "T $(ps -u $USER -L --no-headers | wc -l)";\nps -u $USER -o pid=,nlwp=,args= | grep -E "[n]ode|[n]ext" ; for p in $(pgrep -u $USER node); do echo "CWD $p $(readlink /proc/$p/cwd 2>/dev/null)"; done;\nls -1 ~/domains 2>/dev/null | sed \'s/^/D /\'';
