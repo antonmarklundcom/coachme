@@ -35,7 +35,7 @@ const token = process.env.TELEGRAM_BOT_TOKEN, chatId = process.env.TELEGRAM_CHAT
 const telegram = token && chatId ? createTelegram(token) : null;
 const send = telegram && chatId ? (html: string) => telegram.send(chatId, html) : null;
 const reviewUrl = `http://${config.host}:${config.port}/review`;
-const rhythm = startRhythm({ db, ai, today, timeZone: config.owner_tz, notify: config.notify, now, log, send, reviewUrl });
+const rhythm = startRhythm({ db, ai, today, timeZone: config.owner_tz, notify: config.notify, now, log, send, reviewUrl, backupDir: resolve('data/backups') });
 const bot = telegram && chatId ? startBot({ db, chatId, now, telegram, log, today: async () => (await todayText({ db, today, now })) ?? 'Nothing broken and no open tasks.' }) : null;
 log.info(telegram ? 'Telegram bot on (long polling)' : 'Telegram off: set TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID in .env.local');
 log.info(`coachme listening on http://${config.host}:${config.port}`);

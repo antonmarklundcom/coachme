@@ -1,6 +1,6 @@
 # PLAN — coachme v4, the control tower
 
-Status: **draft, waiting for Anton's approval. No code is written until it is approved.**
+Status: **approved and built.** Phases 1–6 are merged; open items are in `KNOWN-ISSUES.md`.
 Written 2026-09-26 after reading the v1–v3 record (README, `plan.md` v3, `PLAN.md` v1,
 `docs/report-2026-09-11.md`, O3/O4 logs, KNOWN-ISSUES) and the live portfolio
 (`gh repo list`: 87 repos; `C:\Claude 1`: 36 git checkouts).

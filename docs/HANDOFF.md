@@ -1,25 +1,25 @@
 # Handoff — coachme v4 (2026-09-26)
 
-Merged to main: plan (#23), phase 1 (#24), phase 2 (#25), phase 3 (#26), phase 4 (#27).
-Phase 5 is on branch `claude/stoic-lamport-zcw3kp` (not merged). 127 tests green, build green.
+All six phases of docs/PLAN.md are merged: plan (#23), phases 1–4 (#24–#27), phase 5 (#28),
+phase 6 (this branch's PR). 139 tests green, build green. Open items: `KNOWN-ISSUES.md`.
 
-## Phase 5 (Rhythm): done in code, owner checks left
-- [x] Own Telegram bot, long polling (`src/notify/telegram.ts`, `bot.ts`): HTML escaping, 4000-char split, `ok` checked, token never in errors. Only `TELEGRAM_CHAT_ID` is answered; plain text → inbox, `/today`, `/idea …`. Update offset stored in `kv`.
-- [x] Daily push at `notify.daily_at` (08:00), skipped on an empty day; red alert pushed once on open and once on close (`alerts.notified_at`, new `closed_notified_at`). `src/notify/rules.ts`, `rhythm.ts` (runs every minute from `src/server.ts`).
-- [x] Weekly review Sunday 18:00 (`src/review/weekly.ts`): shipped (deploys, stage raises from the new `stage_changes` table, tasks done), broke, earned (revenue, leads), stalled ≥14 d, suggested kills. Stored in `reviews`, shown on `/review` with Pause/Kill, sent to Telegram. Catches up once if the PC was off, not more than 3 days late. `coach review [--send]`, `coach push`.
-- [x] Idea gate on `/ideas/:id/promote`: both answers required and stored; the named project is paused and the idea becomes a `planned` project in one yaml write.
-- [x] `scripts/register-task.ps1`, `scripts/unregister-task.ps1`.
-- [x] `legacy-port/` deleted.
-- [ ] Not verifiable in the cloud sandbox (api.telegram.org blocked, no Windows): Anton sets the bot env values, runs `coach review --send` and `coach push`, and checks a real message arrives; runs `register-task.ps1`, logs off and on, and checks http://127.0.0.1:4000 is up. The .ps1 scripts were not executed anywhere yet.
-- Note: on first start with Telegram set, every red alert that is open at that moment is pushed once.
+## Phase 6: done in code
+- [x] Search Console: OAuth installed-app flow with PKCE and a 127.0.0.1 loopback (`/gsc`),
+  refresh token in git-ignored `data/secrets.json`, daily `gsc` collector storing weekly clicks
+  and impressions per project domain (`gsc_weekly`), trends on project pages.
+- [x] Speed pass: latest-snapshot views rewritten (migration 006); Today 161 → ~25 ms and
+  Portfolio 137 → ~50 ms on a month of real-shaped data (`npx tsx scripts/bench.ts`); a test
+  keeps Today under 200 ms.
+- [x] Backups: `coach backup` and a daily automatic backup to `data/backups/` (14 kept), then
+  snapshots older than 30 days are thinned to one per subject per day.
+- [x] README rewritten (add a domain, an account, a goal on one page); `KNOWN-ISSUES.md` added.
 
-## Next
-- [ ] Phase 6: Search Console OAuth (loopback), speed pass, backup script for `data/coach.db`, final README and KNOWN-ISSUES.
-
-## Owner (Anton)
-- Make the repo private (then un-ignore `portfolio.yaml`).
-- Click "Accept all" on /portfolio (16 sites to live).
-- `.env.local`: ANTHROPIC_API_KEY, TELEGRAM_BOT_TOKEN + TELEGRAM_CHAT_ID (new bot via @BotFather, steps in README), VENDERCRM_FEED_TOKENS.
-- Hostinger SSH keys (see README).
-- After phase 5 merges: delete the v3 Vercel project, its crons and the Neon DB (PLAN §12).
-- Found live: estudio.com.py and nombres.com.py return 503; propia.com.py has no DNS; asado.com.py and flyttatillparaguay.se get SERVFAIL.
+## Owner (Anton), in this order
+1. Delete the v3 Vercel project and its crons, and the Neon DB (the red Vercel check on PRs).
+2. Make the repo private, then un-ignore and commit `portfolio.yaml`.
+3. `.env.local`: `ANTHROPIC_API_KEY`, `TELEGRAM_BOT_TOKEN` + `TELEGRAM_CHAT_ID`,
+   `VENDERCRM_FEED_TOKENS` (or `VENDERCRM_STATS_KEY`), `GSC_CLIENT_ID` + `GSC_CLIENT_SECRET`.
+4. `git pull`, `npm install`, `npm start`; click "Accept all" on /portfolio; Connect on /gsc.
+5. `scripts\coach.cmd push` and `scripts\coach.cmd review --send`: check both arrive in Telegram.
+6. `scripts\register-task.ps1`, log off and on, check http://127.0.0.1:4000.
+7. Hostinger SSH keys (README), and fix the broken sites listed in KNOWN-ISSUES.

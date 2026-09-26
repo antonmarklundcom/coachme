@@ -59,7 +59,7 @@ export function projectLeads(db: DB, projectId: string, from: string, to: string
 
 /** Leads dot: green when the last 7 days hold up against the 7 before, amber when falling, red when they stopped, grey without data. */
 export function leadsSignal(db: DB, projectId: string, now: Date, timeZone: string): { state: string; sentence: string } {
-  const day = (offset: number) => new Intl.DateTimeFormat('en-CA', { timeZone }).format(new Date(now.getTime() - offset * 86_400_000));
+  const fmt = new Intl.DateTimeFormat('en-CA', { timeZone }), day = (offset: number) => fmt.format(new Date(now.getTime() - offset * 86_400_000));
   const last = projectLeads(db, projectId, day(6), day(0)), prev = projectLeads(db, projectId, day(13), day(7));
   if (last === null || prev === null) return { state: 'grey', sentence: 'No CRM lead data for this project.' };
   const sentence = `${last} leads in the last 7 days, ${prev} the 7 before.`;

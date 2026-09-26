@@ -20,6 +20,7 @@ import { suggestEarning } from './money/index.js';
 import { generateReview, sections } from './review/weekly.js';
 import { createTelegram } from './notify/telegram.js';
 import { sendReview, todayText } from './notify/rhythm.js';
+import { backupDb } from './lib/backup.js';
 async function main() {
   const root = fileURLToPath(new URL('../',import.meta.url));
   const config = loadConfig(root), db = openDb(resolve(root,'data/coach.db'));
@@ -72,13 +73,17 @@ async function main() {
       log.info(review.headline);
       for (const s of sections(JSON.parse(review.facts))) log.info(`${s.title}: ${s.lines.length ? `\n  ${s.lines.join('\n  ')}` : 'none'}`);
       if (process.argv.includes('--send')) { const send = telegramSend(); await sendReview(db,send,review,now(),`http://${config.host}:${config.port}/review`); log.info('Sent to Telegram.'); }
+    } else if (command === 'backup') {
+      // coach backup: copy data/coach.db to data/backups/coach-DATE.db now (the server also does this daily).
+      const { path, removed } = await backupDb(db,resolve(root,'data/backups'),new Date(),config.owner_tz);
+      log.info(`Backed up to ${path}${removed.length ? `; removed ${removed.length} older` : ''}.`);
     } else if (command === 'push') {
       // coach push: send today's message to Telegram now (red alerts plus the 3 actions).
       const now = () => new Date(), ai = {db,config:config.ai,timeZone:config.owner_tz,now,log};
       const text = await todayText({db,now,today:{db,ai,githubOwner:config.github_owner,timeZone:config.owner_tz,now}});
       if (!text) log.info('Nothing to send: no red alerts and no open tasks.');
       else { await telegramSend()(text); log.info('Sent to Telegram.'); }
-    } else throw new Error('Usage: coach portfolio generate | coach collect NAME|all | coach status | coach add TEXT | coach today | coach task done|drop ID | coach revenue add PROJECT AMOUNT CURRENCY [recurring] [CLIENT] | coach review [--send] | coach push');
+    } else throw new Error('Usage: coach portfolio generate | coach collect NAME|all | coach status | coach add TEXT | coach today | coach task done|drop ID | coach revenue add PROJECT AMOUNT CURRENCY [recurring] [CLIENT] | coach review [--send] | coach push | coach backup');
   } finally { db.close(); }
 }
 function telegramSend() {

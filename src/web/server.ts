@@ -19,11 +19,14 @@ import { activeStages } from '../portfolio/schema.js';
 import { registerTodayRoutes, ProjectWork, projectWork } from './today.js';
 import { registerMoneyRoutes } from './money.js';
 import { registerRhythmRoutes } from './review.js';
+import { registerGscRoutes, GscTrend, projectGsc } from './gsc.js';
+import { resolve } from 'node:path';
+import type { GscClient, PostForm } from '../gsc/oauth.js';
 import { leadsSignal } from '../money/index.js';
 import type { AiDeps, MessagesLike } from '../ai/client.js';
 import { log } from '../lib/log.js';
-export interface WebOptions { db: DB; config: Config; collectors: Pick<Collector,'name'|'intervalMin'>[]; portfolioPath: string; now?: () => Date; aiClient?: MessagesLike | null }
-export function createApp({ db, config, collectors, portfolioPath, now = () => new Date(), aiClient }: WebOptions) {
+export interface WebOptions { db: DB; config: Config; collectors: Pick<Collector,'name'|'intervalMin'>[]; portfolioPath: string; now?: () => Date; aiClient?: MessagesLike | null; secretsPath?: string; gscClient?: () => GscClient | null; gscPost?: PostForm }
+export function createApp({ db, config, collectors, portfolioPath, now = () => new Date(), aiClient, secretsPath = resolve('data/secrets.json'), gscClient, gscPost }: WebOptions) {
   configSchema.parse(config);
   const app = new Hono();
   const render = (title: string, child: unknown) => jsx(Layout, { title, redCount: (db.prepare("SELECT count(*) AS n FROM alerts WHERE severity='red' AND closed_at IS NULL").get() as {n:number}).n, freshness: freshness(db, collectors, now()), timeZone: config.owner_tz, children: child }).toString();
@@ -41,6 +44,7 @@ export function createApp({ db, config, collectors, portfolioPath, now = () => n
     syncPortfolio(db,parsed,now().toISOString());
   };
   registerRhythmRoutes(app, { db, ai, timeZone: config.owner_tz, now, render, readPortfolio: () => readFileSync(portfolioPath,'utf8'), writePortfolio });
+  registerGscRoutes(app, { db, render, port: config.port, secretsPath, client: gscClient, post: gscPost, now });
   app.get('/portfolio', c => c.html(render('Portfolio', jsx(Board, { projects: (db.prepare('SELECT * FROM projects ORDER BY name').all() as ProjectRow[]).map(p => ({...p,site:siteSignal(projectChecks(db,p.id),now()),leads:leadsSignal(db,p.id,now(),config.owner_tz)})), repos:repos(), local:local(), now:now(), all:c.req.query('all') === '1' }))));
   app.get('/project/:id', c => {
     const project = db.prepare('SELECT * FROM projects WHERE id=?').get(c.req.param('id')) as ProjectRow | undefined;
@@ -49,7 +53,7 @@ export function createApp({ db, config, collectors, portfolioPath, now = () => n
     const checks = projectChecks(db,project.id), site = siteSignal(checks,now());
     return c.html(render(project.name, jsx('div', {}, jsx('p', {}, `Stage: ${project.stage}`), jsx('p', {}, project.notes), jsx(StatusForms, {project}),
       ...projectRepos.map(r => jsx(RepoPanel, {repo:r, local:local().filter(l => l.repo === r.name), now:now()})),
-      jsx(ProjectWork, projectWork(db, project.id)), jsx(Dot,{state:site.state,label:'Site',title:site.sentence}), jsx('h2', {}, 'Domains'), jsx(DomainDetails,{checks,now:now()}), project.stage_suggestion ? jsx('form',{method:'post',action:`/project/${encodeURIComponent(project.id)}/accept-stage`},jsx('p',{},`Evidence says ${project.stage_suggestion}: ${(JSON.parse(project.stage_evidence ?? '[]') as {host?:string;reason?:string}[]).map(e => `${e.host ?? ''}: ${e.reason ?? ''}`).join('; ')}`),jsx('button',{},'Accept?')) : null)));
+      jsx(ProjectWork, projectWork(db, project.id)), jsx(Dot,{state:site.state,label:'Site',title:site.sentence}), jsx('h2', {}, 'Domains'), jsx(DomainDetails,{checks,now:now()}), jsx('h2', {}, 'Search (Google Search Console)'), jsx(GscTrend,{rows:projectGsc(db,project.id)}), project.stage_suggestion ? jsx('form',{method:'post',action:`/project/${encodeURIComponent(project.id)}/accept-stage`},jsx('p',{},`Evidence says ${project.stage_suggestion}: ${(JSON.parse(project.stage_evidence ?? '[]') as {host?:string;reason?:string}[]).map(e => `${e.host ?? ''}: ${e.reason ?? ''}`).join('; ')}`),jsx('button',{},'Accept?')) : null)));
   });
   // Writes every accepted upward suggestion to portfolio.yaml in one pass. Returns how many were applied.
   const acceptStages = (ids: string[]) => {
